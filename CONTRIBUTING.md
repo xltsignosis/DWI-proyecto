@@ -38,3 +38,21 @@ Cada PR debe incluir:
 - Evidencia (captura, link o video)
 - Issue relacionado (`Closes #N`)
 - Al menos un reviewer asignado
+
+
+## Flujo de ramas (GitFlow)
+
+Este proyecto sigue una versión simplificada de GitFlow:
+
+- **main** → versión estable / producción. Nadie trabaja directo aquí.
+- **develop** → rama de integración. Todas las features se unen aquí primero.
+- **feature/**, **docs/**, **test/**, **fix/**, **chore/** → ramas individuales,
+  creadas siempre a partir de `develop`.
+
+### Flujo de trabajo
+
+1. Crear una rama desde `develop` con el prefijo correspondiente.
+2. Hacer commits descriptivos siguiendo el formato `tipo: descripción`.
+3. Abrir un Pull Request hacia `develop`.
+4. Esperar revisión de al menos un compañero.
+5. Hacer merge una vez aprobado.
