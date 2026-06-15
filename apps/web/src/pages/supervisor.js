@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
 
 export default function DashboardSupervisor() {
-  const [lotes, setLotes] = useState([
-    // Datos simulados iniciales (Se llenarán con el GET /api/lotes/estado/:id)
+  // Datos simulados iniciales (Se llenarán con el GET /api/lotes/estado/:id)
+  const lotes = [
     { id: 'LOTE-001', totales: 1000, acumuladas: 950, estado: 'activo' },
     { id: 'LOTE-002', totales: 500, acumuladas: 200, estado: 'activo' }
-  ]);
+  ];
 
   // Implementación de Polling para refrescar datos cada 5 segundos
   useEffect(() => {
@@ -16,8 +16,8 @@ export default function DashboardSupervisor() {
         // const data = await res.json();
         // setLotes(data);
         console.log("Actualizando dashboard en tiempo real...");
-      } catch (error) {
-        console.error("Error al actualizar");
+      } catch (e) {
+        console.error("Error al actualizar:", e);
       }
     }, 5000);
 
