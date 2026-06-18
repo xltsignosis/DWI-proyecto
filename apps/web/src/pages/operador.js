@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { API_URL } from '../lib/api';
 
 export default function PanelOperador() {
   const [loteId, setLoteId] = useState('');
@@ -12,33 +13,30 @@ export default function PanelOperador() {
     setError(false);
 
     try {
-      // 1. Recuperamos los datos del usuario que inició sesión
       const usuarioString = localStorage.getItem('usuario');
       const token = localStorage.getItem('token');
-      
+
       if (!usuarioString) {
         throw new Error("No hay sesión activa. Por favor, inicia sesión de nuevo.");
       }
-      
+
       const usuario = JSON.parse(usuarioString);
 
-      // 2. Petición POST al Backend real (Puerto 3001)
-      const response = await fetch('http://localhost:3001/api/produccion/registrar', {
+      const response = await fetch(`${API_URL}/api/produccion/registrar`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}` // Enviamos el token real de Supabase
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
-          lote_id: loteId, 
-          usuario_id: usuario.id, // ID real extraído de Supabase
+          lote_id: loteId,
+          usuario_id: usuario.id,
           piezas_nuevas: parseInt(piezasNuevas)
         }),
       });
 
       const data = await response.json();
 
-      // Validación del Límite de Piezas (El backend rechaza con 400)
       if (response.status === 400) {
         setError(true);
         setMensaje(data.error || 'Error: Límite excedido.');
@@ -48,11 +46,11 @@ export default function PanelOperador() {
       if (!response.ok) throw new Error(data.error || 'Error en el servidor');
 
       setMensaje(`${piezasNuevas} piezas registradas correctamente en el lote ${loteId}.`);
-      setPiezasNuevas(''); 
+      setPiezasNuevas('');
 
     } catch (err) {
       setError(true);
-      setMensaje(err.message || "Ocurrió un error al intentar comunicar con el servidor.");
+      setMensaje(err.message || "Ocurrió un error al comunicar con el servidor.");
     }
   };
 
@@ -64,23 +62,10 @@ export default function PanelOperador() {
 
         <form onSubmit={manejarRegistro} className="form-group">
           <label>ID Numérico del Lote:</label>
-          <input 
-            type="number" 
-            value={loteId} 
-            onChange={(e) => setLoteId(e.target.value)} 
-            required 
-            placeholder="Ej. 1"
-          />
+          <input type="number" value={loteId} onChange={(e) => setLoteId(e.target.value)} required placeholder="Ej. 1" />
 
           <label>Número de Piezas Fabricadas:</label>
-          <input 
-            type="number" 
-            min="1"
-            value={piezasNuevas} 
-            onChange={(e) => setPiezasNuevas(e.target.value)} 
-            required 
-            placeholder="Ej. 15"
-          />
+          <input type="number" min="1" value={piezasNuevas} onChange={(e) => setPiezasNuevas(e.target.value)} required placeholder="Ej. 15" />
 
           <button type="submit" className="btn-primary">Registrar Piezas</button>
         </form>
@@ -99,9 +84,9 @@ export default function PanelOperador() {
         p { color: #64748b; margin-bottom: 1.5rem; font-size: 0.95rem; }
         .form-group { display: flex; flex-direction: column; gap: 1.2rem; }
         label { font-weight: 600; font-size: 0.85rem; color: #334155; }
-        input { padding: 0.8rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 1rem; transition: border-color 0.2s; }
-        input:focus { outline: none; border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1); }
-        .btn-primary { background: #2563eb; color: white; padding: 0.8rem; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; transition: 0.2s; }
+        input { padding: 0.8rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 1rem; }
+        input:focus { outline: none; border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
+        .btn-primary { background: #2563eb; color: white; padding: 0.8rem; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; }
         .btn-primary:hover { background: #1d4ed8; }
         .alert { margin-top: 1.5rem; padding: 1rem; border-radius: 6px; font-weight: bold; text-align: center; }
         .alert-danger { background: #fee2e2; color: #b91c1c; border: 1px solid #f87171; }
@@ -109,4 +94,4 @@ export default function PanelOperador() {
       `}</style>
     </div>
   );
-} 
+}
