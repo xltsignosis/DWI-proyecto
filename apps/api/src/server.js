@@ -33,11 +33,7 @@ app.use(cors({
 }));
 app.use(express.json());
 
-// 1. Configuración de Supabase
-const supabase = createClient(
-    process.env.SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+
 
 function formatearEstadoLote(lote) {
     const total = Number(lote.total_piezas_requeridas || 0);
