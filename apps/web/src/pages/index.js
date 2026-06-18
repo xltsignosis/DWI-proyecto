@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/router';
+import { API_URL } from '../lib/api';
 
 export default function Login() {
   const router = useRouter();
@@ -18,41 +19,44 @@ export default function Login() {
     setCargando(true);
 
     try {
-      // Aquí se conecta con el endpoint de Backend
-      /*
-      const response = await fetch('/api/auth/login', {
+      //conexión al endpoint real del Backend
+      const response = await fetch(`http://localhost:3001/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(credenciales),
+        // Mapeamos 'usuario' del estado al 'email' que espera el backend de Supabase
+        body: JSON.stringify({
+          email: credenciales.usuario,
+          password: credenciales.password
+        }),
       });
 
       const data = await response.json();
+      console.log("Respuesta del backend:", data); // Para depuraci
 
+      // manejo de errores devueltos por el backend
       if (!response.ok) {
-        throw new Error(data.mensaje || 'Credenciales incorrectas');
+        throw new Error(data.error || 'Credenciales incorrectas');
       }
 
-      // Guardar el token (simulado)
+      // guardarmos el token real y los datos del usuario en el navegador
       localStorage.setItem('token', data.token);
-      */
+      localStorage.setItem('usuario', JSON.stringify(data.usuario));
 
-    //   recordar implemetar la seguridad en las passwords y
-    // cambiar los usuarios por los roles que se van a poner en un fututuro
-      setTimeout(() => {
-        if (credenciales.usuario === 'operador' && credenciales.password === '123') {
-          router.push('/operador'); // nos va aredirigir a la pantalla del operador
-        } else if (credenciales.usuario === 'supervisor' && credenciales.password === '123') {
-          router.push('/supervisor'); // nos va a redirigir a la pantalla del supervisor
-        } else {
-          setError('Usuario o contraseña incorrectos.');
-          setCargando(false);
-        }
-      }, 1000);
-      // -----------------------------------------------------------
+      //redirección automática basada en el rol real de la base de datos
+      console.log("Usuario autenticado con rol:", data.usuario.rol);
+      if (data.usuario.rol === 'operador') {
+        router.push('/operador');
+      } else if (data.usuario.rol === 'supervisor') {
+        router.push('/supervisor');
+      } else {
+        router.push('/dashboard'); 
+      }
 
     } catch (e) {
       setError(e.message);
-      setCargando(false);
+    } finally {
+      // finally asegura que el estado de carga se quite haya error o éxito
+      setCargando(false); 
     }
   };
 
@@ -73,7 +77,7 @@ export default function Login() {
               name="usuario"
               value={credenciales.usuario}
               onChange={manejarCambio}
-              placeholder="Ej. operador / supervisor"
+              placeholder="Ej. operador@prueba.com"
               required
             />
           </div>
@@ -91,7 +95,7 @@ export default function Login() {
             />
           </div>
 
-          {error && <div className="error-message">❌ {error}</div>}
+          {error && <div className="error-message"> {error}</div>}
 
           <button type="submit" className="btn-primary" disabled={cargando}>
             {cargando ? 'Verificando...' : 'Entrar al Sistema'}
@@ -99,14 +103,13 @@ export default function Login() {
         </form>
       </div>
 
-      
       <style jsx>{`
         .container {
           display: flex;
           justify-content: center;
           align-items: center;
           min-height: 100vh;
-          background-color: #0f172a; /* Fondo oscuro industrial */
+          background-color: #0f172a;
           font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
 
@@ -203,6 +206,3 @@ export default function Login() {
     </div>
   );
 }
-
-
-//test
