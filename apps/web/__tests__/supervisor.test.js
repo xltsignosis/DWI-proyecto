@@ -7,8 +7,26 @@ import DashboardSupervisor from '../src/pages/supervisor';
 // Fixtures
 // ---------------------------------------------------------------------------
 const LOTES_ABIERTOS = [
-  { id: 'LOTE-001', totales: 1000, acumuladas: 500, disponibles: 500, estado: 'abierto' },
-  { id: 'LOTE-002', totales: 500, acumuladas: 460, disponibles: 40, estado: 'abierto' },
+  {
+    id: 1,
+    codigo_lote: 'LOTE-001',
+    total_piezas_requeridas: 1000,
+    piezas_acumuladas: 500,
+    piezas_disponibles: 500,
+    porcentaje: 50,
+    limite_cercano: false,
+    estado: 'abierto'
+  },
+  {
+    id: 2,
+    codigo_lote: 'LOTE-002',
+    total_piezas_requeridas: 500,
+    piezas_acumuladas: 460,
+    piezas_disponibles: 40,
+    porcentaje: 92,
+    limite_cercano: true,
+    estado: 'abierto'
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -92,26 +110,52 @@ describe('DashboardSupervisor', () => {
     render(<DashboardSupervisor />);
 
     await waitFor(() => {
-      expect(screen.getByText(/no hay lotes abiertos/i)).toBeInTheDocument();
+      expect(screen.getByText(/no hay lotes registrados/i)).toBeInTheDocument();
     });
   });
 
-  // Filtrado de estados no "abierto"
-  test('filtra lotes que no tienen estado abierto', async () => {
+  test('muestra lotes abiertos y cerrados devueltos por el backend', async () => {
     mockFetchOk([
-      { id: 'LOTE-A', totales: 1000, acumuladas: 500, disponibles: 500, estado: 'abierto' },
-      { id: 'LOTE-B', totales: 500, acumuladas: 200, disponibles: 300, estado: 'cerrado' },
+      {
+        id: 1,
+        codigo_lote: 'LOTE-A',
+        total_piezas_requeridas: 1000,
+        piezas_acumuladas: 500,
+        piezas_disponibles: 500,
+        porcentaje: 50,
+        limite_cercano: false,
+        estado: 'abierto'
+      },
+      {
+        id: 2,
+        codigo_lote: 'LOTE-B',
+        total_piezas_requeridas: 500,
+        piezas_acumuladas: 200,
+        piezas_disponibles: 300,
+        porcentaje: 40,
+        limite_cercano: false,
+        estado: 'cerrado'
+      },
     ]);
     render(<DashboardSupervisor />);
 
     await waitFor(() => expect(screen.getByText('LOTE-A')).toBeInTheDocument());
-    expect(screen.queryByText('LOTE-B')).not.toBeInTheDocument();
+    expect(screen.getByText('LOTE-B')).toBeInTheDocument();
   });
 
   // 5. Alerta aparece cuando porcentaje > 90%
   test('muestra la alerta Límite Cercano cuando acumuladas/totales > 90%', async () => {
     mockFetchOk([
-      { id: 'LOTE-X', totales: 100, acumuladas: 91, disponibles: 9, estado: 'abierto' },
+      {
+        id: 1,
+        codigo_lote: 'LOTE-X',
+        total_piezas_requeridas: 100,
+        piezas_acumuladas: 91,
+        piezas_disponibles: 9,
+        porcentaje: 91,
+        limite_cercano: true,
+        estado: 'abierto'
+      },
     ]);
     render(<DashboardSupervisor />);
 
@@ -123,7 +167,16 @@ describe('DashboardSupervisor', () => {
   // 6. Alerta NO aparece cuando porcentaje ≤ 90%
   test('no muestra la alerta Límite Cercano cuando acumuladas/totales es exactamente 90%', async () => {
     mockFetchOk([
-      { id: 'LOTE-X', totales: 100, acumuladas: 90, disponibles: 10, estado: 'abierto' },
+      {
+        id: 1,
+        codigo_lote: 'LOTE-X',
+        total_piezas_requeridas: 100,
+        piezas_acumuladas: 90,
+        piezas_disponibles: 10,
+        porcentaje: 90,
+        limite_cercano: false,
+        estado: 'abierto'
+      },
     ]);
     render(<DashboardSupervisor />);
 
@@ -133,7 +186,16 @@ describe('DashboardSupervisor', () => {
 
   test('no muestra la alerta Límite Cercano cuando acumuladas/totales < 90%', async () => {
     mockFetchOk([
-      { id: 'LOTE-X', totales: 100, acumuladas: 89, disponibles: 11, estado: 'abierto' },
+      {
+        id: 1,
+        codigo_lote: 'LOTE-X',
+        total_piezas_requeridas: 100,
+        piezas_acumuladas: 89,
+        piezas_disponibles: 11,
+        porcentaje: 89,
+        limite_cercano: false,
+        estado: 'abierto'
+      },
     ]);
     render(<DashboardSupervisor />);
 
@@ -150,6 +212,7 @@ describe('DashboardSupervisor', () => {
 
     // Fetch inicial
     await act(async () => {
+      jest.advanceTimersByTime(0);
       await Promise.resolve();
       await Promise.resolve();
     });
@@ -183,6 +246,7 @@ describe('DashboardSupervisor', () => {
 
     // Esperar fetch inicial
     await act(async () => {
+      jest.advanceTimersByTime(0);
       await Promise.resolve();
       await Promise.resolve();
     });

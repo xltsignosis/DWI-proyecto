@@ -5,14 +5,33 @@ const { createClient } = require('@supabase/supabase-js');
 const { validarRegistro } = require('./validaciones');
 
 const app = express();
+
+const allowedOrigins = [
+    process.env.FRONTEND_URL,
+    process.env.CORS_ORIGINS,
+    'http://localhost:3000',
+    'http://127.0.0.1:3000'
+]
+    .filter(Boolean)
+    .flatMap((origin) => origin.split(','))
+    .map((origin) => origin.trim().replace(/\/$/, ''));
+
 app.use(cors({
-    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+    origin(origin, callback) {
+        if (!origin) return callback(null, true);
+        const normalizedOrigin = origin.replace(/\/$/, '');
+
+        if (allowedOrigins.includes(normalizedOrigin)) {
+            return callback(null, true);
+        }
+
+        return callback(new Error('Origen no permitido por CORS'));
+    },
     credentials: true
 }));
 app.use(express.json());
 
 // 1. Configuración de Supabase
-console.log("supabaseUrl:", process.env.SUPABASE_URL);
 const supabase = createClient(
     process.env.SUPABASE_URL,
     process.env.SUPABASE_SERVICE_ROLE_KEY

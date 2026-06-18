@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/router';
-import { API_URL } from '../lib/api';
+import { apiUrl } from '../lib/api';
 
 export default function Login() {
   const router = useRouter();
@@ -19,7 +19,7 @@ export default function Login() {
     setCargando(true);
 
     try {
-      const response = await fetch(`${API_URL}/api/auth/login`, {
+      const response = await fetch(apiUrl('/api/auth/login'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
