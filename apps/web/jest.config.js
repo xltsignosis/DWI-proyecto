@@ -1,14 +1,14 @@
-const nextJest = require('next/jest');
-
-const createJestConfig = nextJest({
-  dir: './',
-});
-
-/** @type {import('jest').Config} */
-const config = {
-  coverageProvider: 'v8',
+module.exports = {
   testEnvironment: 'jsdom',
   setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
+  transform: {
+    '^.+\\.(js|jsx|ts|tsx)$': ['babel-jest', { presets: ['next/babel'] }],
+  },
+  transformIgnorePatterns: [
+    '/node_modules/',
+    '^.+\\.module\\.(css|sass|scss)$',
+  ],
+  moduleNameMapper: {
+    '^.+\\.module\\.(css|sass|scss)$': '<rootDir>/__mocks__/styleMock.js',
+  },
 };
-
-module.exports = createJestConfig(config);
