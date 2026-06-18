@@ -365,6 +365,12 @@ app.get('/api/nomina/reporte', async (req, res) => {
         if (!inicio || !fin) {
             return res.status(400).json({ error: 'Parámetros inicio y fin son requeridos' });
         }
+        if (isNaN(Date.parse(inicio)) || isNaN(Date.parse(fin))) {
+            return res.status(400).json({ error: 'Las fechas deben tener formato válido (YYYY-MM-DD)' });
+        }
+        if (new Date(inicio) > new Date(fin)) {
+            return res.status(400).json({ error: 'La fecha de inicio no puede ser posterior a la fecha fin' });
+        }
 
         const reporte = await obtenerDatosNomina(inicio, fin);
         res.json(reporte);

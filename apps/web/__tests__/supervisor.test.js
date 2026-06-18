@@ -7,8 +7,8 @@ import DashboardSupervisor from '../src/pages/supervisor';
 // Fixtures
 // ---------------------------------------------------------------------------
 const LOTES_ABIERTOS = [
-  { id: 'LOTE-001', totales: 1000, acumuladas: 500, disponibles: 500, estado: 'abierto' },
-  { id: 'LOTE-002', totales: 500, acumuladas: 460, disponibles: 40, estado: 'abierto' },
+  { id: 'LOTE-001', total_piezas_requeridas: 1000, piezas_acumuladas: 500, piezas_disponibles: 500, estado: 'abierto' },
+  { id: 'LOTE-002', total_piezas_requeridas: 500, piezas_acumuladas: 460, piezas_disponibles: 40, estado: 'abierto' },
 ];
 
 // ---------------------------------------------------------------------------
@@ -99,8 +99,8 @@ describe('DashboardSupervisor', () => {
   // Filtrado de estados no "abierto"
   test('filtra lotes que no tienen estado abierto', async () => {
     mockFetchOk([
-      { id: 'LOTE-A', totales: 1000, acumuladas: 500, disponibles: 500, estado: 'abierto' },
-      { id: 'LOTE-B', totales: 500, acumuladas: 200, disponibles: 300, estado: 'cerrado' },
+      { id: 'LOTE-A', total_piezas_requeridas: 1000, piezas_acumuladas: 500, piezas_disponibles: 500, estado: 'abierto' },
+      { id: 'LOTE-B', total_piezas_requeridas: 500, piezas_acumuladas: 200, piezas_disponibles: 300, estado: 'cerrado' },
     ]);
     render(<DashboardSupervisor />);
 
@@ -111,7 +111,7 @@ describe('DashboardSupervisor', () => {
   // 5. Alerta aparece cuando porcentaje > 90%
   test('muestra la alerta Límite Cercano cuando acumuladas/totales > 90%', async () => {
     mockFetchOk([
-      { id: 'LOTE-X', totales: 100, acumuladas: 91, disponibles: 9, estado: 'abierto' },
+      { id: 'LOTE-X', total_piezas_requeridas: 100, piezas_acumuladas: 91, piezas_disponibles: 9, estado: 'abierto' },
     ]);
     render(<DashboardSupervisor />);
 
@@ -123,7 +123,7 @@ describe('DashboardSupervisor', () => {
   // 6. Alerta NO aparece cuando porcentaje ≤ 90%
   test('no muestra la alerta Límite Cercano cuando acumuladas/totales es exactamente 90%', async () => {
     mockFetchOk([
-      { id: 'LOTE-X', totales: 100, acumuladas: 90, disponibles: 10, estado: 'abierto' },
+      { id: 'LOTE-X', total_piezas_requeridas: 100, piezas_acumuladas: 90, piezas_disponibles: 10, estado: 'abierto' },
     ]);
     render(<DashboardSupervisor />);
 
@@ -133,7 +133,7 @@ describe('DashboardSupervisor', () => {
 
   test('no muestra la alerta Límite Cercano cuando acumuladas/totales < 90%', async () => {
     mockFetchOk([
-      { id: 'LOTE-X', totales: 100, acumuladas: 89, disponibles: 11, estado: 'abierto' },
+      { id: 'LOTE-X', total_piezas_requeridas: 100, piezas_acumuladas: 89, piezas_disponibles: 11, estado: 'abierto' },
     ]);
     render(<DashboardSupervisor />);
 

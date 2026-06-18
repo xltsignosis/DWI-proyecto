@@ -60,7 +60,7 @@ export default function DashboardSupervisor() {
               <p className="empty-msg">No hay lotes abiertos en este momento.</p>
             ) : (
               lotes.map((lote) => {
-                const porcentaje = (lote.acumuladas / lote.totales) * 100;
+                const porcentaje = (lote.piezas_acumuladas / lote.total_piezas_requeridas) * 100;
                 const limiteCritico = porcentaje > 90;
 
                 return (
@@ -79,11 +79,11 @@ export default function DashboardSupervisor() {
                       <p>
                         Progreso:{' '}
                         <strong>
-                          {lote.acumuladas} / {lote.totales}
+                          {lote.piezas_acumuladas} / {lote.total_piezas_requeridas}
                         </strong>{' '}
                         piezas
                       </p>
-                      <p>Disponibles: {lote.disponibles}</p>
+                      <p>Disponibles: {lote.piezas_disponibles}</p>
                     </div>
 
                     <div className="progress-bar-container">
