@@ -55,6 +55,10 @@ function formatearEstadoLote(lote) {
     };
 }
 
+function getSupabaseErrorMessage(error, fallback) {
+    return error?.message || error?.details || fallback;
+}
+
 async function actualizarLoteConEstado(loteId, cambios, estado) {
     const cambiosConEstadoTexto = { ...cambios, estado };
     let resultado = await supabase
@@ -254,9 +258,17 @@ app.post('/api/produccion/registrar', async (req, res) => {
     const piezasNuevas = Number(piezas_nuevas);
 
     try {
+        if (!usuario_id) {
+            return res.status(401).json({ error: 'Sesión inválida: vuelve a iniciar sesión' });
+        }
+
         const { data: lote, error: errLote } = await consultarLotePorReferencia(lote_id);
 
         if (errLote || !lote) return res.status(404).json({ error: 'Lote no encontrado' });
+
+        if ((lote.estado || '').toLowerCase() === 'cerrado') {
+            return res.status(400).json({ error: 'Registro rechazado: el lote ya está cerrado.' });
+        }
 
         const validacion = validarRegistro(
             lote.piezas_acumuladas,
@@ -276,7 +288,13 @@ app.post('/api/produccion/registrar', async (req, res) => {
             { lote_id: lote.id, usuario_id, piezas_reportadas: piezasNuevas }
         ]);
 
-        if (errInsert) return res.status(500).json({ error: 'Error al guardar el registro' });
+        if (errInsert) {
+            console.error('Error al guardar registro de producción:', errInsert);
+            return res.status(500).json({
+                error: 'Error al guardar el registro',
+                detalle: getSupabaseErrorMessage(errInsert, 'No se pudo insertar en registros_produccion')
+            });
+        }
 
         const nuevoAcumulado = validacion.nuevoAcumulado;
         const nuevoEstado = validacion.completo ? 'cerrado' : 'abierto';
@@ -285,7 +303,13 @@ app.post('/api/produccion/registrar', async (req, res) => {
 
         const { data: loteActualizado, error: errUpdate } = await actualizarLoteConEstado(lote.id, cambiosLote, nuevoEstado);
 
-        if (errUpdate) return res.status(500).json({ error: 'Error al actualizar el lote' });
+        if (errUpdate) {
+            console.error('Error al actualizar lote:', errUpdate);
+            return res.status(500).json({
+                error: 'Error al actualizar el lote',
+                detalle: getSupabaseErrorMessage(errUpdate, 'No se pudo actualizar el lote')
+            });
+        }
 
         res.json({
             mensaje: 'Producción registrada',

@@ -57,6 +57,11 @@ export default function PanelOperador() {
       }
 
       const usuario = JSON.parse(usuarioString);
+      if (!usuario?.id) {
+        localStorage.removeItem('usuario');
+        localStorage.removeItem('token');
+        throw new Error("Sesión inválida. Cierra sesión e inicia sesión de nuevo.");
+      }
 
       const response = await fetch(apiUrl('/api/produccion/registrar'), {
         method: 'POST',
@@ -65,7 +70,7 @@ export default function PanelOperador() {
           'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
-          lote_id: loteId,
+          lote_id: lote?.id || loteId,
           usuario_id: usuario.id,
           piezas_nuevas: Number(piezasNuevas)
         }),
@@ -79,7 +84,7 @@ export default function PanelOperador() {
         return;
       }
 
-      if (!response.ok) throw new Error(data.error || 'Error en el servidor');
+      if (!response.ok) throw new Error(data.detalle ? `${data.error}: ${data.detalle}` : data.error || 'Error en el servidor');
 
       setLote(data.lote || null);
       setMensaje(`${piezasNuevas} piezas registradas correctamente en el lote ${loteId}.`);
