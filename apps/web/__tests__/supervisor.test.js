@@ -3,6 +3,10 @@ import { render, screen, waitFor, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import DashboardSupervisor from '../src/pages/supervisor';
 
+jest.mock('next/router', () => ({
+  useRouter: () => ({ push: jest.fn(), pathname: '/supervisor' }),
+}));
+
 // ---------------------------------------------------------------------------
 // Fixtures
 // ---------------------------------------------------------------------------

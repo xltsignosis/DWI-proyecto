@@ -148,6 +148,37 @@ async function consultarLotePorReferencia(referencia) {
 }
 
 // ---------------------------------------------------------------------------
+// Auth middleware
+// ---------------------------------------------------------------------------
+
+async function verificarAuth(req, res, next) {
+    const authHeader = req.headers['authorization'] || '';
+    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+
+    if (!token) {
+        return res.status(401).json({ error: 'Token requerido' });
+    }
+
+    const { data, error } = await supabase.auth.getUser(token);
+
+    if (error || !data.user) {
+        return res.status(401).json({ error: 'Token inválido o expirado' });
+    }
+
+    const { data: usuarios, error: dbError } = await supabase
+        .from('usuarios')
+        .select('id, nombre, rol')
+        .eq('id', data.user.id);
+
+    if (dbError || !usuarios || usuarios.length === 0) {
+        return res.status(401).json({ error: 'Usuario no encontrado' });
+    }
+
+    req.usuario = usuarios[0];
+    next();
+}
+
+// ---------------------------------------------------------------------------
 // Endpoints — Auth
 // ---------------------------------------------------------------------------
 
@@ -303,135 +334,171 @@ app.post('/api/produccion/registrar', async (req, res) => {
 // Endpoints — Nómina
 // ---------------------------------------------------------------------------
 
-app.get('/api/nomina/reporte', async (req, res) => {
+app.get('/api/nomina/reporte', verificarAuth, async (req, res) => {
+    const { rol } = req.usuario;
+    if (rol !== 'administrador' && rol !== 'supervisor') {
+        return res.status(403).json({ error: 'Acceso denegado' });
+    }
+
+    const { inicio, fin } = req.query;
+    if (!inicio || !fin) {
+        return res.status(400).json({ error: 'Se requieren los parámetros inicio y fin' });
+    }
+
     try {
-        const auth = await verificarAuth(req, res, ['administrador', 'supervisor']);
-        if (!auth) return;
+        const { data: registros, error: errReg } = await supabase
+            .from('registros_produccion')
+            .select('*, usuarios(nombre), lotes(codigo_lote)')
+            .gte('fecha_registro', inicio)
+            .lte('fecha_registro', fin);
 
-        const { inicio, fin } = req.query;
-        if (!inicio || !fin) {
-            return res.status(400).json({ error: 'Parámetros inicio y fin son requeridos' });
-        }
-        if (isNaN(Date.parse(inicio)) || isNaN(Date.parse(fin))) {
-            return res.status(400).json({ error: 'Las fechas deben tener formato válido (YYYY-MM-DD)' });
-        }
-        if (new Date(inicio) > new Date(fin)) {
-            return res.status(400).json({ error: 'La fecha de inicio no puede ser posterior a la fecha fin' });
+        if (errReg) return res.status(500).json({ error: 'Error al consultar registros' });
+
+        const { data: tarifas, error: errTar } = await supabase
+            .from('tarifas_nomina')
+            .select('*');
+
+        if (errTar) return res.status(500).json({ error: 'Error al consultar tarifas' });
+
+        const porOperador = {};
+
+        for (const reg of registros || []) {
+            const tarifa = (tarifas || []).find(t =>
+                t.tipo_pieza === reg.tipo_pieza &&
+                reg.fecha_registro >= t.fecha_inicio_vigencia &&
+                reg.fecha_registro <= t.fecha_fin_vigencia
+            );
+
+            const pago = tarifa ? Number(tarifa.pago_por_pieza) : 0;
+            const subtotal = reg.piezas_reportadas * pago;
+            const uid = reg.usuario_id;
+
+            if (!porOperador[uid]) {
+                porOperador[uid] = {
+                    operador_id: uid,
+                    nombre: reg.usuarios?.nombre || uid,
+                    piezas_totales: 0,
+                    monto_total: 0,
+                    detalle: []
+                };
+            }
+
+            porOperador[uid].piezas_totales += reg.piezas_reportadas;
+            porOperador[uid].monto_total += subtotal;
+            porOperador[uid].detalle.push({
+                lote: reg.lotes?.codigo_lote || String(reg.lote_id),
+                tipo_pieza: reg.tipo_pieza,
+                piezas: reg.piezas_reportadas,
+                tarifa: pago,
+                subtotal
+            });
         }
 
-        const reporte = await obtenerDatosNomina(inicio, fin);
-        res.json(reporte);
+        res.json(Object.values(porOperador));
     } catch (err) {
-        res.status(500).json({ error: err.message || 'Error al calcular el reporte de nómina' });
+        res.status(500).json({ error: 'Error interno' });
     }
 });
 
-app.get('/api/nomina/historial', async (req, res) => {
+app.get('/api/nomina/historial', verificarAuth, async (req, res) => {
+    const { lote_id, usuario_id } = req.query;
+
     try {
-        const auth = await verificarAuth(req, res, ['administrador', 'supervisor']);
-        if (!auth) return;
-
-        const { lote_id, usuario_id } = req.query;
-
         let query = supabase
             .from('registros_produccion')
-            .select('id, lote_id, usuario_id, piezas_reportadas, tipo_pieza, fecha_registro, usuarios(nombre), lotes(codigo_lote)')
+            .select('*, usuarios(nombre), lotes(codigo_lote)')
             .order('fecha_registro', { ascending: false });
 
         if (lote_id) query = query.eq('lote_id', lote_id);
         if (usuario_id) query = query.eq('usuario_id', usuario_id);
 
-        const { data: registros, error } = await query;
+        const { data, error } = await query;
+        if (error) return res.status(500).json({ error: 'Error al consultar historial' });
 
-        if (error) return res.status(500).json({ error: 'Error al consultar el historial' });
-
-        res.json((registros || []).map(r => ({
+        const resultado = (data || []).map(r => ({
             id: r.id,
-            lote_id: r.lote_id,
             codigo_lote: r.lotes?.codigo_lote || String(r.lote_id),
-            usuario_id: r.usuario_id,
-            nombre_operador: r.usuarios?.nombre || 'Desconocido',
+            nombre_operador: r.usuarios?.nombre || r.usuario_id,
             piezas_reportadas: r.piezas_reportadas,
-            tipo_pieza: r.tipo_pieza || 'sin_tipo',
+            tipo_pieza: r.tipo_pieza,
             fecha_registro: r.fecha_registro
-        })));
+        }));
+
+        res.json(resultado);
     } catch (err) {
-        res.status(500).json({ error: 'Error al consultar el historial' });
+        res.status(500).json({ error: 'Error interno' });
     }
 });
 
-app.post('/api/nomina/exportar', async (req, res) => {
+app.post('/api/nomina/exportar', verificarAuth, async (req, res) => {
+    const { rol } = req.usuario;
+    if (rol !== 'administrador') {
+        return res.status(403).json({ error: 'Acceso denegado' });
+    }
+
+    const { inicio, fin, formato } = req.body;
+    if (!inicio || !fin || !['pdf', 'excel'].includes(formato)) {
+        return res.status(400).json({ error: 'Parámetros inválidos. formato debe ser pdf o excel' });
+    }
+
     try {
-        const auth = await verificarAuth(req, res, ['administrador']);
-        if (!auth) return;
+        const { data: registros } = await supabase
+            .from('registros_produccion')
+            .select('*, usuarios(nombre), lotes(codigo_lote)')
+            .gte('fecha_registro', inicio)
+            .lte('fecha_registro', fin);
 
-        const { inicio, fin, formato } = req.body;
+        const { data: tarifas } = await supabase.from('tarifas_nomina').select('*');
 
-        if (!inicio || !fin) {
-            return res.status(400).json({ error: 'Parámetros inicio y fin son requeridos' });
-        }
-        if (formato !== 'pdf' && formato !== 'excel') {
-            return res.status(400).json({ error: 'Formato debe ser pdf o excel' });
-        }
-
-        const reporte = await obtenerDatosNomina(inicio, fin);
+        const filas = (registros || []).map(r => {
+            const tarifa = (tarifas || []).find(t =>
+                t.tipo_pieza === r.tipo_pieza &&
+                r.fecha_registro >= t.fecha_inicio_vigencia &&
+                r.fecha_registro <= t.fecha_fin_vigencia
+            );
+            const pago = tarifa ? Number(tarifa.pago_por_pieza) : 0;
+            return {
+                operador: r.usuarios?.nombre || r.usuario_id,
+                lote: r.lotes?.codigo_lote || String(r.lote_id),
+                tipo_pieza: r.tipo_pieza,
+                piezas: r.piezas_reportadas,
+                tarifa: pago,
+                subtotal: r.piezas_reportadas * pago
+            };
+        });
 
         if (formato === 'pdf') {
-            const pdfBuffer = await new Promise((resolve, reject) => {
-                const doc = new PDFDocument({ margin: 50 });
-                const buffers = [];
-                doc.on('data', chunk => buffers.push(chunk));
-                doc.on('end', () => resolve(Buffer.concat(buffers)));
-                doc.on('error', reject);
-
-                doc.fontSize(18).font('Helvetica-Bold').text('Reporte de Nómina — MaquilaControl', { align: 'center' });
-                doc.moveDown();
-                doc.fontSize(11).font('Helvetica').text(`Periodo: ${inicio} al ${fin}`);
-                doc.moveDown();
-
-                reporte.forEach(op => {
-                    doc.font('Helvetica-Bold').text(op.nombre, { continued: true });
-                    doc.font('Helvetica').text(`   Piezas: ${op.piezas_totales}   Monto: ${formatMXN(op.monto_total)}`);
-                    op.detalle.forEach(d => {
-                        doc.fontSize(9).text(
-                            `  ${d.lote} | ${d.tipo_pieza} | ${d.piezas} pzs × ${formatMXN(d.tarifa)} = ${formatMXN(d.subtotal)}`,
-                            { indent: 20 }
-                        );
-                    });
-                    doc.fontSize(11).moveDown(0.5);
-                });
-
-                doc.end();
-            });
-
+            const doc = new PDFDocument({ margin: 40 });
             res.setHeader('Content-Type', 'application/pdf');
-            res.setHeader('Content-Disposition', `attachment; filename=nomina_${inicio}_${fin}.pdf`);
-            return res.end(pdfBuffer);
+            res.setHeader('Content-Disposition', `attachment; filename="nomina_${inicio}_${fin}.pdf"`);
+            doc.pipe(res);
+            doc.fontSize(16).text(`Nómina ${inicio} — ${fin}`, { align: 'center' });
+            doc.moveDown();
+            for (const f of filas) {
+                doc.fontSize(11).text(
+                    `${f.operador} | ${f.lote} | ${f.tipo_pieza} | ${f.piezas} pzs × $${f.tarifa} = $${f.subtotal}`
+                );
+            }
+            doc.end();
+        } else {
+            const wb = new ExcelJS.Workbook();
+            const ws = wb.addWorksheet('Nómina');
+            ws.columns = [
+                { header: 'Operador', key: 'operador', width: 24 },
+                { header: 'Lote', key: 'lote', width: 16 },
+                { header: 'Tipo pieza', key: 'tipo_pieza', width: 14 },
+                { header: 'Piezas', key: 'piezas', width: 10 },
+                { header: 'Tarifa', key: 'tarifa', width: 10 },
+                { header: 'Subtotal', key: 'subtotal', width: 12 }
+            ];
+            ws.addRows(filas);
+            res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+            res.setHeader('Content-Disposition', `attachment; filename="nomina_${inicio}_${fin}.xlsx"`);
+            await wb.xlsx.write(res);
+            res.end();
         }
-
-        // Excel
-        const workbook = new ExcelJS.Workbook();
-        const sheet = workbook.addWorksheet('Nómina');
-
-        sheet.columns = [
-            { header: 'Operador', key: 'nombre', width: 30 },
-            { header: 'Piezas Totales', key: 'piezas_totales', width: 15 },
-            { header: 'Monto Total (MXN)', key: 'monto_total', width: 22 },
-        ];
-
-        sheet.getRow(1).font = { bold: true };
-        reporte.forEach(op => sheet.addRow({
-            nombre: op.nombre,
-            piezas_totales: op.piezas_totales,
-            monto_total: op.monto_total
-        }));
-
-        const buffer = await workbook.xlsx.writeBuffer();
-        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-        res.setHeader('Content-Disposition', `attachment; filename=nomina_${inicio}_${fin}.xlsx`);
-        return res.end(Buffer.from(buffer));
     } catch (err) {
-        res.status(500).json({ error: err.message || 'Error al exportar la nómina' });
+        res.status(500).json({ error: 'Error al exportar' });
     }
 });
 

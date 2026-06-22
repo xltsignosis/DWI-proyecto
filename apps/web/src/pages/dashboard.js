@@ -21,7 +21,7 @@ export default function Dashboard() {
     } else {
       router.push('/operador');
     }
-  }, []);
+  }, [router]);
 
   return (
     <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', background: '#0f172a', color: 'white', fontFamily: 'sans-serif' }}>

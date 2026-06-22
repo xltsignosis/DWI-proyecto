@@ -8,7 +8,6 @@ function formatMXN(monto) {
 
 export default function Nomina() {
   const router = useRouter();
-  const [accesoDenegado, setAccesoDenegado] = useState(false);
   const [inicio, setInicio] = useState('');
   const [fin, setFin] = useState('');
   const [reporte, setReporte] = useState([]);
@@ -28,9 +27,10 @@ export default function Nomina() {
 
     const usuario = JSON.parse(usuarioStr);
     if (usuario.rol !== 'administrador') {
-      setAccesoDenegado(true);
+      router.push('/');
+      return;
     }
-  }, []);
+  }, [router]);
 
   function token() {
     return localStorage.getItem('token');
@@ -89,17 +89,6 @@ export default function Nomina() {
       else next.add(id);
       return next;
     });
-  }
-
-  if (accesoDenegado) {
-    return (
-      <div className="container">
-        <p className="error-msg" role="alert">
-          Acceso denegado: solo administradores pueden ver la nómina.
-        </p>
-        <style jsx>{estilos}</style>
-      </div>
-    );
   }
 
   return (

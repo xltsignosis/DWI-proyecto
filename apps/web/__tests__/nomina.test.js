@@ -6,8 +6,10 @@ import Nomina from '../src/pages/nomina';
 // ---------------------------------------------------------------------------
 // Mocks
 // ---------------------------------------------------------------------------
+const mockPush = jest.fn();
+
 jest.mock('next/router', () => ({
-  useRouter: () => ({ push: jest.fn(), pathname: '/nomina' }),
+  useRouter: () => ({ push: mockPush, pathname: '/nomina' }),
 }));
 
 // URL.createObjectURL / revokeObjectURL no existen en JSDOM
@@ -60,6 +62,7 @@ function setFechas() {
 beforeEach(() => {
   localStorage.clear();
   global.fetch = jest.fn();
+  mockPush.mockClear();
   global.URL.createObjectURL.mockClear();
   global.URL.revokeObjectURL.mockClear();
   process.env.NEXT_PUBLIC_API_URL = 'http://localhost:3001';
@@ -246,7 +249,7 @@ describe('Nomina', () => {
   });
 
   // 8. Acceso denegado si rol no es administrador
-  test('muestra acceso denegado si el rol es operador', async () => {
+  test('redirige a / si el rol es operador', async () => {
     setupOperadorUser();
     global.fetch = jest.fn();
 
@@ -254,11 +257,8 @@ describe('Nomina', () => {
     await act(async () => {});
 
     await waitFor(() => {
-      expect(screen.getByRole('alert')).toHaveTextContent(/acceso denegado/i);
+      expect(mockPush).toHaveBeenCalledWith('/');
     });
-
-    // El selector de periodo no debe mostrarse
-    expect(screen.queryByLabelText(/fecha inicio/i)).not.toBeInTheDocument();
   });
 
   // Extra: el botón de calcular está deshabilitado sin fechas
