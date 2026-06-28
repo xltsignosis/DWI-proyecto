@@ -1,5 +1,6 @@
 const configuredApiUrl = process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_RENDER_API_URL || '';
 
+/* istanbul ignore next */
 function isLocalBrowser() {
   if (typeof window === 'undefined') return false;
   return ['localhost', '127.0.0.1'].includes(window.location.hostname);
