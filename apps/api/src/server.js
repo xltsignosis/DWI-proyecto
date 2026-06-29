@@ -363,11 +363,20 @@ app.get('/api/nomina/reporte', verificarAuth, async (req, res) => {
         const porOperador = {};
 
         for (const reg of registros || []) {
-            const tarifa = (tarifas || []).find(t =>
+            let tarifa = (tarifas || []).find(t =>
                 t.tipo_pieza === reg.tipo_pieza &&
                 reg.fecha_registro >= t.fecha_inicio_vigencia &&
                 reg.fecha_registro <= t.fecha_fin_vigencia
             );
+
+            if (!tarifa) {
+                const sorted = [...(tarifas || [])].sort((a, b) =>
+                    (b.fecha_vigencia || b.fecha_inicio_vigencia || '').localeCompare(
+                        a.fecha_vigencia || a.fecha_inicio_vigencia || ''
+                    )
+                );
+                tarifa = sorted[0] || null;
+            }
 
             const pago = tarifa ? Number(tarifa.pago_por_pieza) : 0;
             const subtotal = reg.piezas_reportadas * pago;
@@ -401,7 +410,12 @@ app.get('/api/nomina/reporte', verificarAuth, async (req, res) => {
 });
 
 app.get('/api/nomina/historial', verificarAuth, async (req, res) => {
-    const { lote_id, usuario_id } = req.query;
+    const { rol } = req.usuario;
+    if (rol !== 'administrador' && rol !== 'supervisor') {
+        return res.status(403).json({ error: 'Acceso denegado' });
+    }
+
+    const { lote_id, usuario_id, inicio, fin } = req.query;
 
     try {
         let query = supabase
@@ -411,17 +425,21 @@ app.get('/api/nomina/historial', verificarAuth, async (req, res) => {
 
         if (lote_id) query = query.eq('lote_id', lote_id);
         if (usuario_id) query = query.eq('usuario_id', usuario_id);
+        if (inicio) query = query.gte('fecha_registro', inicio);
+        if (fin) query = query.lte('fecha_registro', fin);
 
         const { data, error } = await query;
         if (error) return res.status(500).json({ error: 'Error al consultar historial' });
 
         const resultado = (data || []).map(r => ({
             id: r.id,
-            codigo_lote: r.lotes?.codigo_lote || String(r.lote_id),
+            fecha_registro: r.fecha_registro,
+            usuario_id: r.usuario_id,
             nombre_operador: r.usuarios?.nombre || r.usuario_id,
-            piezas_reportadas: r.piezas_reportadas,
+            lote_id: r.lote_id,
+            codigo_lote: r.lotes?.codigo_lote || String(r.lote_id),
             tipo_pieza: r.tipo_pieza,
-            fecha_registro: r.fecha_registro
+            piezas_reportadas: r.piezas_reportadas
         }));
 
         res.json(resultado);
@@ -499,6 +517,67 @@ app.post('/api/nomina/exportar', verificarAuth, async (req, res) => {
         }
     } catch (err) {
         res.status(500).json({ error: 'Error al exportar' });
+    }
+});
+
+// ---------------------------------------------------------------------------
+// Endpoints — Tarifas
+// ---------------------------------------------------------------------------
+
+app.get('/api/tarifas', verificarAuth, async (req, res) => {
+    const { rol } = req.usuario;
+    if (rol !== 'administrador' && rol !== 'supervisor') {
+        return res.status(403).json({ error: 'Acceso denegado' });
+    }
+
+    try {
+        const { data, error } = await supabase
+            .from('tarifas_nomina')
+            .select('*')
+            .order('fecha_inicio_vigencia', { ascending: false });
+
+        if (error) return res.status(500).json({ error: 'Error al consultar tarifas' });
+
+        res.json(data || []);
+    } catch (err) {
+        res.status(500).json({ error: 'Error interno' });
+    }
+});
+
+app.post('/api/tarifas', verificarAuth, async (req, res) => {
+    const { rol } = req.usuario;
+    if (rol !== 'administrador') {
+        return res.status(403).json({ error: 'Acceso denegado' });
+    }
+
+    const { tipo_pieza, pago_por_pieza, fecha_inicio_vigencia, fecha_fin_vigencia } = req.body;
+
+    if (!pago_por_pieza || Number(pago_por_pieza) <= 0) {
+        return res.status(400).json({ error: 'pago_por_pieza debe ser mayor a 0' });
+    }
+
+    if (!fecha_inicio_vigencia || !fecha_fin_vigencia || fecha_fin_vigencia <= fecha_inicio_vigencia) {
+        return res.status(400).json({ error: 'fecha_fin_vigencia debe ser posterior a fecha_inicio_vigencia' });
+    }
+
+    try {
+        const { data, error } = await supabase
+            .from('tarifas_nomina')
+            .insert([{
+                tipo_pieza,
+                pago_por_pieza: Number(pago_por_pieza),
+                fecha_inicio_vigencia,
+                fecha_fin_vigencia,
+                creado_por: req.usuario.id
+            }])
+            .select('*')
+            .single();
+
+        if (error) return res.status(500).json({ error: 'Error al crear tarifa' });
+
+        res.status(201).json(data);
+    } catch (err) {
+        res.status(500).json({ error: 'Error interno' });
     }
 });
 
