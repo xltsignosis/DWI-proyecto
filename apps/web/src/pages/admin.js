@@ -47,8 +47,13 @@ export default function AdminUsuarios() {
   }, [router]);
 
   useEffect(() => {
-    fetchUsuarios();
-  }, [fetchUsuarios]);
+  let activo = true;
+  async function cargar() {
+    if (activo) await fetchUsuarios();
+  }
+  cargar();
+  return () => { activo = false; };
+}, [fetchUsuarios]);
 
   const crearUsuario = async (e) => {
     e.preventDefault();
