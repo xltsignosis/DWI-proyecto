@@ -69,8 +69,7 @@ describe('DashboardSupervisor', () => {
       expect(screen.getByText('LOTE-002')).toBeInTheDocument();
     });
     expect(screen.getByText(/500 \/ 1000/)).toBeInTheDocument();
-    expect(screen.getAllByText('Disponibles')[0]).toBeInTheDocument();
-    expect(screen.getByText('500')).toBeInTheDocument();
+    expect(screen.getByText(/Disponibles: 500/)).toBeInTheDocument();
   });
 
   test('muestra mensaje de error en caso de error de red', async () => {
