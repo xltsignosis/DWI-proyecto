@@ -26,6 +26,20 @@ export default function AdminUsuarios() {
   const [creando, setCreando] = useState(false);
   const [mensajeExito, setMensajeExito] = useState('');
 
+  useEffect(() => {
+    const usuarioStr = localStorage.getItem('usuario');
+    const token = localStorage.getItem('token');
+    if (!usuarioStr || !token) {
+      router.push('/');
+      return;
+    }
+    const usuario = JSON.parse(usuarioStr);
+    if(usuario.rol !== 'administrador') {
+      router.push('/');
+      return;
+    }
+  }, [router]);
+
   const fetchUsuarios = useCallback(async () => {
     try {
       const res = await fetch(apiUrl('/api/usuarios'), {
@@ -74,7 +88,7 @@ export default function AdminUsuarios() {
       setPassword('');
       setRol('operador');
       setMensajeExito(`Usuario ${data.nombre} creado correctamente.`);
-      fetchUsuarios();
+      void fetchUsuarios();
     } catch (err) {
       setError(err.message);
     } finally {
