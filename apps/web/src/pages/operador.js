@@ -19,8 +19,15 @@ export default function PanelOperador() {
       return null;
     }
 
-    const response = await fetch(apiUrl(`/api/lotes/estado/${encodeURIComponent(valor)}`));
+    const token = localStorage.getItem('token');
+    const response = await fetch(apiUrl(`/api/lotes/estado/${encodeURIComponent(valor)}`), {
+      headers: token ? { Authorization: `Bearer ${token}` } : {}
+    });
     const data = await response.json();
+
+    if (response.status === 401) {
+      throw new Error('Sesión inválida. Cierra sesión e inicia sesión de nuevo.');
+    }
 
     if (!response.ok) {
       throw new Error(data.error || 'No se pudo consultar el lote');

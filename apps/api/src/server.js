@@ -215,7 +215,7 @@ app.post('/api/auth/login', async (req, res) => {
 // Endpoints — Lotes
 // ---------------------------------------------------------------------------
 
-app.get('/api/lotes/estado', async (req, res) => {
+app.get('/api/lotes/estado', verificarAuth, async (req, res) => {
     try {
         const { data: lotes, error } = await consultarLotes();
         if (error) return res.status(500).json({ error: 'Error al consultar lotes' });
@@ -225,7 +225,7 @@ app.get('/api/lotes/estado', async (req, res) => {
     }
 });
 
-app.get('/api/lotes/estado/:id', async (req, res) => {
+app.get('/api/lotes/estado/:id', verificarAuth, async (req, res) => {
     try {
         const { data: lote, error } = await consultarLotePorReferencia(req.params.id);
         if (error || !lote) return res.status(404).json({ error: 'Lote no encontrado' });
@@ -235,7 +235,12 @@ app.get('/api/lotes/estado/:id', async (req, res) => {
     }
 });
 
-app.post('/api/lotes', async (req, res) => {
+app.post('/api/lotes', verificarAuth, async (req, res) => {
+    const { rol } = req.usuario;
+    if (rol !== 'administrador' && rol !== 'supervisor') {
+        return res.status(403).json({ error: 'Acceso denegado' });
+    }
+
     const { codigo_lote, total_piezas_requeridas } = req.body;
     const total = Number(total_piezas_requeridas);
     const codigo = String(codigo_lote || '').trim();
@@ -267,15 +272,12 @@ app.post('/api/lotes', async (req, res) => {
 // Endpoints — Producción
 // ---------------------------------------------------------------------------
 
-app.post('/api/produccion/registrar', async (req, res) => {
-    const { lote_id, usuario_id, piezas_nuevas } = req.body;
+app.post('/api/produccion/registrar', verificarAuth, async (req, res) => {
+    const { lote_id, piezas_nuevas } = req.body;
     const piezasNuevas = Number(piezas_nuevas);
+    const usuarioId = req.usuario.id;
 
     try {
-        if (!usuario_id) {
-            return res.status(401).json({ error: 'Sesión inválida: vuelve a iniciar sesión' });
-        }
-
         const { data: lote, error: errLote } = await consultarLotePorReferencia(lote_id);
         if (errLote || !lote) return res.status(404).json({ error: 'Lote no encontrado' });
 
@@ -297,7 +299,7 @@ app.post('/api/produccion/registrar', async (req, res) => {
         if (validacion.excede) return res.status(400).json({ error: 'Registro rechazado: Supera el límite.' });
 
         const { error: errInsert } = await supabase.from('registros_produccion').insert([
-            { lote_id: lote.id, usuario_id, piezas_reportadas: piezasNuevas }
+            { lote_id: lote.id, usuario_id: usuarioId, piezas_reportadas: piezasNuevas }
         ]);
 
         if (errInsert) {
