@@ -1,3 +1,6 @@
+const dns = require('dns');
+dns.setDefaultResultOrder('ipv4first'); // Fuerza el uso de IPv4 en llamadas externas
+
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
@@ -523,27 +526,6 @@ app.post('/api/nomina/exportar', verificarAuth, async (req, res) => {
 // ---------------------------------------------------------------------------
 // Endpoints — Usuarios
 // ---------------------------------------------------------------------------
-
-app.get('/api/usuarios', verificarAuth, async (req, res) => {
-  const { rol } = req.usuario;
-  if (rol !== 'administrador' && rol !== 'supervisor') {
-    return res.status(403).json({ error: 'Acceso denegado' });
-  }
-
-  try {
-    const { data, error } = await supabase
-      .from('usuarios')
-      .select('id, nombre, email, rol, fecha_creacion')
-      .order('fecha_creacion', { ascending: false });
-
-    if (error) return res.status(500).json({ error: 'Error al consultar usuarios' });
-
-    res.json(data || []);
-  } catch (err) {
-    res.status(500).json({ error: 'Error interno' });
-  }
-});
-
 app.post('/api/usuarios', verificarAuth, async (req, res) => {
   const { rol } = req.usuario;
   if (rol !== 'administrador') {
@@ -590,17 +572,21 @@ app.post('/api/usuarios', verificarAuth, async (req, res) => {
       return res.status(500).json({ error: 'Error al guardar perfil del usuario' });
     }
 
-    // Enviar correo de bienvenida (no bloquea si falla)
+    // Enviar correo de bienvenida de forma asíncrona pero segura
     try {
       const { enviarBienvenida } = require('./services/gmail');
-      await enviarBienvenida({ nombre, email, password, rol: nuevoRol });
-    } catch (emailError) {
-      console.error('Error al enviar correo de bienvenida:', emailError.message);
+      // No usamos await aquí para no retrasar la respuesta del frontend y evitar Timeouts
+      enviarBienvenida({ nombre, email, password, rol: nuevoRol })
+        .then(() => console.log(`Correo enviado con éxito a ${email}`))
+        .catch(emailError => console.error('Error asíncrono al enviar correo:', emailError.message));
+    } catch (e) {
+      console.error('Fallo en la invocación del servicio de email:', e.message);
     }
 
-    res.status(201).json(usuarioDb);
+    // Respondemos con 210 o 201 para asegurar el renderizado de la tabla en el cliente
+    return res.status(201).json(usuarioDb);
   } catch (err) {
-    res.status(500).json({ error: 'Error interno' });
+    return res.status(500).json({ error: 'Error interno' });
   }
 });
 
