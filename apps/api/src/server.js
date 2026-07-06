@@ -521,6 +521,90 @@ app.post('/api/nomina/exportar', verificarAuth, async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// Endpoints — Usuarios
+// ---------------------------------------------------------------------------
+
+app.get('/api/usuarios', verificarAuth, async (req, res) => {
+  const { rol } = req.usuario;
+  if (rol !== 'administrador' && rol !== 'supervisor') {
+    return res.status(403).json({ error: 'Acceso denegado' });
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('usuarios')
+      .select('id, nombre, email, rol, fecha_creacion')
+      .order('fecha_creacion', { ascending: false });
+
+    if (error) return res.status(500).json({ error: 'Error al consultar usuarios' });
+
+    res.json(data || []);
+  } catch (err) {
+    res.status(500).json({ error: 'Error interno' });
+  }
+});
+
+app.post('/api/usuarios', verificarAuth, async (req, res) => {
+  const { rol } = req.usuario;
+  if (rol !== 'administrador') {
+    return res.status(403).json({ error: 'Acceso denegado' });
+  }
+
+  const { nombre, email, password, rol: nuevoRol } = req.body;
+
+  if (!nombre || !email || !password || !nuevoRol) {
+    return res.status(400).json({ error: 'Faltan campos obligatorios' });
+  }
+
+  const rolesPermitidos = ['operador', 'supervisor', 'administrador'];
+  if (!rolesPermitidos.includes(nuevoRol)) {
+    return res.status(400).json({ error: 'Rol inválido' });
+  }
+
+  try {
+    const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true
+    });
+
+    if (authError) {
+      if (authError.message.includes('already registered')) {
+        return res.status(409).json({ error: 'El correo ya está registrado' });
+      }
+      return res.status(500).json({ error: 'Error al crear usuario en Auth' });
+    }
+
+    const { data: usuarioDb, error: dbError } = await supabase
+      .from('usuarios')
+      .insert([{
+        id: authData.user.id,
+        nombre,
+        email,
+        rol: nuevoRol
+      }])
+      .select('*')
+      .single();
+
+    if (dbError) {
+      return res.status(500).json({ error: 'Error al guardar perfil del usuario' });
+    }
+
+    // Enviar correo de bienvenida (no bloquea si falla)
+    try {
+      const { enviarBienvenida } = require('./services/gmail');
+      await enviarBienvenida({ nombre, email, password, rol: nuevoRol });
+    } catch (emailError) {
+      console.error('Error al enviar correo de bienvenida:', emailError.message);
+    }
+
+    res.status(201).json(usuarioDb);
+  } catch (err) {
+    res.status(500).json({ error: 'Error interno' });
+  }
+});
+
+// ---------------------------------------------------------------------------
 // Endpoints — Tarifas
 // ---------------------------------------------------------------------------
 
