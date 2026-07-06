@@ -589,6 +589,29 @@ app.post('/api/usuarios', verificarAuth, async (req, res) => {
     return res.status(500).json({ error: 'Error interno' });
   }
 });
+app.get('/api/usuarios', verificarAuth, async (req, res) => {
+  const { rol } = req.usuario;
+  
+  // Bloqueo de seguridad: Solo admin y supervisor pueden listar usuarios según tus tests
+  if (rol !== 'administrador' && rol !== 'supervisor') {
+    return res.status(403).json({ error: 'Acceso denegado' });
+  }
+
+  try {
+    const { data: listaUsuarios, error: dbError } = await supabase
+      .from('usuarios')
+      .select('*')
+      .order('nombre', { ascending: true });
+
+    if (dbError) {
+      return res.status(500).json({ error: 'Error al consultar la base de datos' });
+    }
+
+    return res.status(200).json(listaUsuarios || []);
+  } catch (err) {
+    return res.status(500).json({ error: 'Error interno' });
+  }
+});
 
 // ---------------------------------------------------------------------------
 // Endpoints — Tarifas
