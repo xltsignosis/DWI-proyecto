@@ -1,10 +1,11 @@
-﻿const supertest = require('supertest');
-const { createQueryMock } = require('./helpers');
+const supertest = require('supertest');
+const { createQueryMock, OPERADOR_USER } = require('./helpers');
 
+let mockGetUser;
 let mockFromImpl;
 
 jest.mock('../src/supabaseClient', () => ({
-    auth: { getUser: jest.fn() },
+    auth: { getUser: (...args) => mockGetUser(...args) },
     from: (...args) => mockFromImpl(...args),
 }));
 
@@ -22,9 +23,14 @@ function loteMock(overrides = {}) {
     };
 }
 
-function setupMocks({ lote, insertError = null, updateError = null } = {}) {
+function setupMocks({ lote, insertError = null, updateError = null, authUser = OPERADOR_USER } = {}) {
+    mockGetUser = jest.fn().mockResolvedValue({
+        data: { user: { id: authUser.id } },
+        error: null,
+    });
     let loteCallCount = 0;
     mockFromImpl = jest.fn().mockImplementation((table) => {
+        if (table === 'usuarios') return createQueryMock({ data: [authUser] });
         if (table === 'lotes') {
             loteCallCount += 1;
             // 1ra llamada: consultarLotePorReferencia (SELECT) -> sin error
@@ -40,17 +46,17 @@ function setupMocks({ lote, insertError = null, updateError = null } = {}) {
 }
 
 beforeEach(() => {
+    jest.clearAllMocks();
     setupMocks({ lote: loteMock() });
 });
 
 describe('POST /api/produccion/registrar', () => {
-    test('retorna 401 si no se envía usuario_id', async () => {
+    test('retorna 401 sin token de autorización', async () => {
         const res = await supertest(app)
             .post('/api/produccion/registrar')
             .send({ lote_id: 1, piezas_nuevas: 10 });
 
         expect(res.status).toBe(401);
-        expect(res.body.error).toMatch(/sesión inválida/i);
     });
 
     test('retorna 404 si el lote no existe', async () => {
@@ -58,7 +64,8 @@ describe('POST /api/produccion/registrar', () => {
 
         const res = await supertest(app)
             .post('/api/produccion/registrar')
-            .send({ lote_id: 999, usuario_id: 'op-1', piezas_nuevas: 10 });
+            .set('Authorization', 'Bearer valid-token')
+            .send({ lote_id: 999, piezas_nuevas: 10 });
 
         expect(res.status).toBe(404);
     });
@@ -68,7 +75,8 @@ describe('POST /api/produccion/registrar', () => {
 
         const res = await supertest(app)
             .post('/api/produccion/registrar')
-            .send({ lote_id: 1, usuario_id: 'op-1', piezas_nuevas: 5 });
+            .set('Authorization', 'Bearer valid-token')
+            .send({ lote_id: 1, piezas_nuevas: 5 });
 
         expect(res.status).toBe(400);
         expect(res.body.error).toMatch(/lote ya está cerrado/i);
@@ -77,7 +85,8 @@ describe('POST /api/produccion/registrar', () => {
     test('retorna 400 si piezas_nuevas es cero o negativo (inválido)', async () => {
         const res = await supertest(app)
             .post('/api/produccion/registrar')
-            .send({ lote_id: 1, usuario_id: 'op-1', piezas_nuevas: 0 });
+            .set('Authorization', 'Bearer valid-token')
+            .send({ lote_id: 1, piezas_nuevas: 0 });
 
         expect(res.status).toBe(400);
         expect(res.body.error).toMatch(/datos inválidos/i);
@@ -86,7 +95,8 @@ describe('POST /api/produccion/registrar', () => {
     test('retorna 400 si piezas_nuevas es negativo (inválido)', async () => {
         const res = await supertest(app)
             .post('/api/produccion/registrar')
-            .send({ lote_id: 1, usuario_id: 'op-1', piezas_nuevas: -10 });
+            .set('Authorization', 'Bearer valid-token')
+            .send({ lote_id: 1, piezas_nuevas: -10 });
 
         expect(res.status).toBe(400);
     });
@@ -94,7 +104,8 @@ describe('POST /api/produccion/registrar', () => {
     test('retorna 400 si el registro excede el total del lote', async () => {
         const res = await supertest(app)
             .post('/api/produccion/registrar')
-            .send({ lote_id: 1, usuario_id: 'op-1', piezas_nuevas: 30 });
+            .set('Authorization', 'Bearer valid-token')
+            .send({ lote_id: 1, piezas_nuevas: 30 });
 
         expect(res.status).toBe(400);
         expect(res.body.error).toMatch(/supera el límite/i);
@@ -103,7 +114,8 @@ describe('POST /api/produccion/registrar', () => {
     test('registra correctamente cuando las piezas están dentro del límite (lote sigue abierto)', async () => {
         const res = await supertest(app)
             .post('/api/produccion/registrar')
-            .send({ lote_id: 1, usuario_id: 'op-1', piezas_nuevas: 15 });
+            .set('Authorization', 'Bearer valid-token')
+            .send({ lote_id: 1, piezas_nuevas: 15 });
 
         expect(res.status).toBe(200);
         expect(res.body.estado).toBe('abierto');
@@ -115,7 +127,8 @@ describe('POST /api/produccion/registrar', () => {
 
         const res = await supertest(app)
             .post('/api/produccion/registrar')
-            .send({ lote_id: 1, usuario_id: 'op-1', piezas_nuevas: 20 });
+            .set('Authorization', 'Bearer valid-token')
+            .send({ lote_id: 1, piezas_nuevas: 20 });
 
         expect(res.status).toBe(200);
         expect(res.body.estado).toBe('cerrado');
@@ -124,9 +137,38 @@ describe('POST /api/produccion/registrar', () => {
     test('acepta lote_id como código de lote (string) en lugar de ID numérico', async () => {
         const res = await supertest(app)
             .post('/api/produccion/registrar')
-            .send({ lote_id: 'LOTE-001', usuario_id: 'op-1', piezas_nuevas: 10 });
+            .set('Authorization', 'Bearer valid-token')
+            .send({ lote_id: 'LOTE-001', piezas_nuevas: 10 });
 
         expect(res.status).toBe(200);
+    });
+
+    test('usa req.usuario.id del token, ignora usuario_id del body', async () => {
+        let registrosBuilder;
+        let loteCallCount = 0;
+        mockFromImpl = jest.fn().mockImplementation((table) => {
+            if (table === 'usuarios') return createQueryMock({ data: [OPERADOR_USER] });
+            if (table === 'lotes') {
+                loteCallCount += 1;
+                return createQueryMock({ data: loteCallCount === 1 ? loteMock() : loteMock() });
+            }
+            if (table === 'registros_produccion') {
+                registrosBuilder = createQueryMock({ data: [{ id: 1 }] });
+                return registrosBuilder;
+            }
+            return createQueryMock({ data: [] });
+        });
+
+        await supertest(app)
+            .post('/api/produccion/registrar')
+            .set('Authorization', 'Bearer valid-token')
+            .send({ lote_id: 1, usuario_id: 'usuario-malicioso', piezas_nuevas: 10 });
+
+        expect(registrosBuilder.insert).toHaveBeenCalledWith(
+            expect.arrayContaining([
+                expect.objectContaining({ usuario_id: OPERADOR_USER.id })
+            ])
+        );
     });
 
     test('retorna 500 si falla la inserción del registro de producción', async () => {
@@ -134,7 +176,8 @@ describe('POST /api/produccion/registrar', () => {
 
         const res = await supertest(app)
             .post('/api/produccion/registrar')
-            .send({ lote_id: 1, usuario_id: 'op-1', piezas_nuevas: 10 });
+            .set('Authorization', 'Bearer valid-token')
+            .send({ lote_id: 1, piezas_nuevas: 10 });
 
         expect(res.status).toBe(500);
         expect(res.body.error).toMatch(/error al guardar el registro/i);
@@ -145,16 +188,18 @@ describe('POST /api/produccion/registrar', () => {
 
         const res = await supertest(app)
             .post('/api/produccion/registrar')
-            .send({ lote_id: 1, usuario_id: 'op-1', piezas_nuevas: 10 });
+            .set('Authorization', 'Bearer valid-token')
+            .send({ lote_id: 1, piezas_nuevas: 10 });
 
         expect(res.status).toBe(500);
         expect(res.body.error).toMatch(/error al actualizar el lote/i);
     });
 
     describe('[hallazgos]', () => {
-        test('el endpoint NO verifica el JWT: cualquier usuario_id enviado en el body es aceptado', async () => {
+        test('usa req.usuario.id del token, no usuario_id del body (vulnerabilidad corregida)', async () => {
             const res = await supertest(app)
                 .post('/api/produccion/registrar')
+                .set('Authorization', 'Bearer valid-token')
                 .send({ lote_id: 1, usuario_id: 'usuario-inventado-sin-sesion', piezas_nuevas: 5 });
 
             expect(res.status).toBe(200);
@@ -163,7 +208,8 @@ describe('POST /api/produccion/registrar', () => {
         test('acepta piezas_nuevas con decimales (no se valida que sea un entero)', async () => {
             const res = await supertest(app)
                 .post('/api/produccion/registrar')
-                .send({ lote_id: 1, usuario_id: 'op-1', piezas_nuevas: 2.75 });
+                .set('Authorization', 'Bearer valid-token')
+                .send({ lote_id: 1, piezas_nuevas: 2.75 });
 
             expect(res.status).toBe(200);
         });
