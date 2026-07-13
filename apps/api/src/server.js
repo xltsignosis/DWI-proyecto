@@ -36,6 +36,47 @@ app.use(cors({
 }));
 app.use(express.json());
 
+// ---------------------------------------------------------------------------
+// Healthcheck
+// ---------------------------------------------------------------------------
+
+// app.get('/health', async (req, res) => {
+//     const healthcheck = {
+//         status: 'ok',
+//         service: 'api',
+//         timestamp: new Date().toISOString(),
+//         checks: {
+//             supabase: 'unknown'
+//         }
+//     };
+
+//     try {
+//         const timeout = new Promise((_, reject) =>
+//             setTimeout(() => reject(new Error('timeout')), 3000)
+//         );
+
+//         // Consulta liviana (head: true no trae filas, solo confirma conexión + tabla accesible)
+//         const check = supabase
+//             .from('usuarios')
+//             .select('id', { count: 'exact', head: true });
+
+//         const { error } = await Promise.race([check, timeout]);
+
+//         if (error) {
+//             healthcheck.status = 'degraded';
+//             healthcheck.checks.supabase = 'error';
+//             return res.status(503).json(healthcheck);
+//         }
+
+//         healthcheck.checks.supabase = 'ok';
+//         return res.status(200).json(healthcheck);
+//     } catch (err) {
+//         healthcheck.status = 'degraded';
+//         healthcheck.checks.supabase = err.message === 'timeout' ? 'timeout' : 'unreachable';
+//         return res.status(503).json(healthcheck);
+//     }
+// });
+
 
 
 function formatearEstadoLote(lote) {
@@ -133,21 +174,41 @@ async function consultarLotes() {
 
 async function consultarLotePorReferencia(referencia) {
     const valor = String(referencia || '').trim();
-    const columna = /^\d+$/.test(valor) ? 'id' : 'codigo_lote';
-
+    if (!valor) return { data: null, error: null };
+    
     let resultado = await supabase
         .from('lotes')
         .select('*')
-        .eq(columna, valor)
-        .single();
+        .ilike('codigo_lote', valor)
+        .maybeSingle();
 
-    if (!resultado.error) return resultado;
+    if (!resultado.error && resultado.data) return resultado;
 
-    return supabase
+    resultado = await supabase
         .from('lotes')
         .select('*, estados_lote(nombre)')
-        .eq(columna, valor)
-        .single();
+        .ilike('codigo_lote', valor)
+        .maybeSingle();
+
+    if (!resultado.error && resultado.data) return resultado;
+
+    if (/^\d+$/.test(valor)) {
+        resultado = await supabase
+            .from('lotes')
+            .select('*')
+            .eq('id', valor)
+            .maybeSingle();
+
+        if (!resultado.error && resultado.data) return resultado;
+
+        resultado = await supabase
+            .from('lotes')
+            .select('*, estados_lote(nombre)')
+            .eq('id', valor)
+            .maybeSingle();
+    }
+
+    return resultado;
 }
 
 // ---------------------------------------------------------------------------
