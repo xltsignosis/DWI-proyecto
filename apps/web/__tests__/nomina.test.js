@@ -34,6 +34,11 @@ function setupOperadorUser() {
   localStorage.setItem('usuario', JSON.stringify({ id: 'op-1', nombre: 'Operador', rol: 'operador' }));
 }
 
+function setupSupervisorUser() {
+  localStorage.setItem('token', 'test-token');
+  localStorage.setItem('usuario', JSON.stringify({ id: 'sv-1', nombre: 'Supervisor', rol: 'supervisor' }));
+}
+
 function mockFetchOkReporte(data = REPORTE_FIXTURE) {
   global.fetch = jest.fn().mockResolvedValue({
     ok: true,
@@ -202,6 +207,48 @@ describe('Nomina', () => {
     await waitFor(() => expect(screen.getByText('Operador Test')).toBeInTheDocument());
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: /exportar pdf/i })); });
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(/error al exportar/i));
+  });
+
+  // HU-13: acceso de supervisor (solo lectura)
+  test('supervisor puede entrar a la página sin ser redirigido', async () => {
+    setupSupervisorUser();
+    global.fetch = jest.fn().mockImplementation(() => new Promise(() => {}));
+    render(<Nomina />);
+    await act(async () => {});
+    expect(mockPush).not.toHaveBeenCalled();
+    expect(screen.getByLabelText(/fecha inicio/i)).toBeInTheDocument();
+  });
+
+  test('supervisor ve la tabla y el botón "Calcular nómina" pero NO los botones de exportar', async () => {
+    setupSupervisorUser();
+    mockFetchOkReporte();
+    render(<Nomina />);
+    await act(async () => {});
+    setFechas();
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /calcular/i })); });
+    await waitFor(() => expect(screen.getByText('Operador Test')).toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: /exportar pdf/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /exportar excel/i })).not.toBeInTheDocument();
+  });
+
+  test('administrador sigue viendo los botones Exportar PDF y Exportar Excel (sin regresión)', async () => {
+    setupAdminUser();
+    mockFetchOkReporte();
+    render(<Nomina />);
+    await act(async () => {});
+    setFechas();
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /calcular/i })); });
+    await waitFor(() => expect(screen.getByText('Operador Test')).toBeInTheDocument());
+    expect(screen.getByRole('button', { name: /exportar pdf/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /exportar excel/i })).toBeInTheDocument();
+  });
+
+  test('operador sigue siendo redirigido a / (sin regresión)', async () => {
+    setupOperadorUser();
+    global.fetch = jest.fn();
+    render(<Nomina />);
+    await act(async () => {});
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/'));
   });
 
   // Líneas 177-185: toggleExpandido — expandir y colapsar filas
