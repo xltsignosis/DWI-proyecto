@@ -2,6 +2,7 @@
     const builder = {
         select: jest.fn().mockReturnThis(),
         eq: jest.fn().mockReturnThis(),
+        ilike: jest.fn().mockReturnThis(),
         gte: jest.fn().mockReturnThis(),
         lte: jest.fn().mockReturnThis(),
         order: jest.fn().mockReturnThis(),
