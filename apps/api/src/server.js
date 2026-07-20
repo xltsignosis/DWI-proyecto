@@ -133,21 +133,15 @@ async function consultarLotes() {
 
 async function consultarLotePorReferencia(referencia) {
     const valor = String(referencia || '').trim();
+    if (!valor) return { data: null, error: null };
+
     const columna = /^\d+$/.test(valor) ? 'id' : 'codigo_lote';
-
-    let resultado = await supabase
-        .from('lotes')
-        .select('*')
-        .eq(columna, valor)
-        .single();
-
-    if (!resultado.error) return resultado;
 
     return supabase
         .from('lotes')
-        .select('*, estados_lote(nombre)')
+        .select('*')
         .eq(columna, valor)
-        .single();
+        .maybeSingle();
 }
 
 // ---------------------------------------------------------------------------

@@ -190,6 +190,21 @@ describe('GET /api/lotes/estado/:id', () => {
             .set('Authorization', 'Bearer valid-token');
         expect(res.status).toBe(404);
     });
+
+    test('[perf] id numérico invoca supabase.from("lotes") exactamente una vez', async () => {
+        mockFromImpl = jest.fn().mockImplementation((table) => {
+            if (table === 'usuarios') return createQueryMock({ data: [ADMIN_USER] });
+            if (table === 'lotes') return createQueryMock({ data: LOTE_ABIERTO });
+            return createQueryMock({ data: [] });
+        });
+
+        await supertest(app)
+            .get('/api/lotes/estado/1')
+            .set('Authorization', 'Bearer valid-token');
+
+        const loteCalls = mockFromImpl.mock.calls.filter(([t]) => t === 'lotes').length;
+        expect(loteCalls).toBe(1);
+    });
 });
 
 describe('POST /api/lotes', () => {
@@ -421,7 +436,6 @@ describe('PUT /api/lotes/:id', () => {
                 if (loteCalls === 1) return createQueryMock({ data: LOTE_ABIERTO });
                 return createQueryMock({ data: null, error: { code: '23505', message: 'duplicate key' } });
             }
-            if (table === 'estados_lote') return createQueryMock({ data: null, error: new Error('not found') });
             return createQueryMock({ data: [] });
         });
 
@@ -443,7 +457,6 @@ describe('PUT /api/lotes/:id', () => {
                 if (loteCalls === 1) return createQueryMock({ data: LOTE_ABIERTO });
                 return createQueryMock({ data: null, error: { code: '99999', message: 'DB error' } });
             }
-            if (table === 'estados_lote') return createQueryMock({ data: null, error: new Error('not found') });
             return createQueryMock({ data: [] });
         });
 

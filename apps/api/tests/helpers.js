@@ -12,6 +12,10 @@
             const singleData = Array.isArray(data) ? (data[0] ?? null) : data;
             return Promise.resolve({ data: singleData, error });
         }),
+        maybeSingle: jest.fn().mockImplementation(() => {
+            const singleData = Array.isArray(data) ? (data[0] ?? null) : data;
+            return Promise.resolve({ data: singleData, error });
+        }),
         then: (onFulfilled, onRejected) =>
             Promise.resolve({ data, error }).then(onFulfilled, onRejected),
     };
