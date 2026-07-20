@@ -175,40 +175,14 @@ async function consultarLotes() {
 async function consultarLotePorReferencia(referencia) {
     const valor = String(referencia || '').trim();
     if (!valor) return { data: null, error: null };
-    
-    let resultado = await supabase
+
+    const columna = /^\d+$/.test(valor) ? 'id' : 'codigo_lote';
+
+    return supabase
         .from('lotes')
         .select('*')
-        .ilike('codigo_lote', valor)
+        .eq(columna, valor)
         .maybeSingle();
-
-    if (!resultado.error && resultado.data) return resultado;
-
-    resultado = await supabase
-        .from('lotes')
-        .select('*, estados_lote(nombre)')
-        .ilike('codigo_lote', valor)
-        .maybeSingle();
-
-    if (!resultado.error && resultado.data) return resultado;
-
-    if (/^\d+$/.test(valor)) {
-        resultado = await supabase
-            .from('lotes')
-            .select('*')
-            .eq('id', valor)
-            .maybeSingle();
-
-        if (!resultado.error && resultado.data) return resultado;
-
-        resultado = await supabase
-            .from('lotes')
-            .select('*, estados_lote(nombre)')
-            .eq('id', valor)
-            .maybeSingle();
-    }
-
-    return resultado;
 }
 
 // ---------------------------------------------------------------------------
