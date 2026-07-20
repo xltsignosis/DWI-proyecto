@@ -15,6 +15,7 @@ export default function Nomina() {
   const [error, setError] = useState(null);
   const [calculado, setCalculado] = useState(false);
   const [expandidos, setExpandidos] = useState(new Set());
+  const [rolUsuario, setRolUsuario] = useState(null);
 
   useEffect(() => {
     const usuarioStr = localStorage.getItem('usuario');
@@ -26,10 +27,11 @@ export default function Nomina() {
     }
 
     const usuario = JSON.parse(usuarioStr);
-    if (usuario.rol !== 'administrador') {
+    if (usuario.rol !== 'administrador' && usuario.rol !== 'supervisor') {
       router.push('/');
       return;
     }
+    setRolUsuario(usuario.rol);
   }, [router]);
 
   function token() {
@@ -143,6 +145,7 @@ export default function Nomina() {
 
       {reporte.length > 0 && !loading && (
         <>
+          {rolUsuario === 'administrador' && (
           <div className="acciones-export">
             <button
               className="btn-export btn-pdf"
@@ -159,6 +162,7 @@ export default function Nomina() {
               Exportar Excel
             </button>
           </div>
+          )}
 
           <table className="tabla-nomina">
             <thead>
