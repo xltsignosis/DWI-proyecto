@@ -36,9 +36,46 @@ app.use(cors({
 }));
 app.use(express.json());
 
-app.get('/health', (req, res) => {
-    res.json({ status: 'ok', timestamp: new Date().toISOString() });
-});
+// ---------------------------------------------------------------------------
+// Healthcheck
+// ---------------------------------------------------------------------------
+
+// app.get('/health', async (req, res) => {
+//     const healthcheck = {
+//         status: 'ok',
+//         service: 'api',
+//         timestamp: new Date().toISOString(),
+//         checks: {
+//             supabase: 'unknown'
+//         }
+//     };
+
+//     try {
+//         const timeout = new Promise((_, reject) =>
+//             setTimeout(() => reject(new Error('timeout')), 3000)
+//         );
+
+//         // Consulta liviana (head: true no trae filas, solo confirma conexión + tabla accesible)
+//         const check = supabase
+//             .from('usuarios')
+//             .select('id', { count: 'exact', head: true });
+
+//         const { error } = await Promise.race([check, timeout]);
+
+//         if (error) {
+//             healthcheck.status = 'degraded';
+//             healthcheck.checks.supabase = 'error';
+//             return res.status(503).json(healthcheck);
+//         }
+
+//         healthcheck.checks.supabase = 'ok';
+//         return res.status(200).json(healthcheck);
+//     } catch (err) {
+//         healthcheck.status = 'degraded';
+//         healthcheck.checks.supabase = err.message === 'timeout' ? 'timeout' : 'unreachable';
+//         return res.status(503).json(healthcheck);
+//     }
+// });
 
 function formatearEstadoLote(lote) {
     const total = Number(lote.total_piezas_requeridas || 0);
