@@ -329,6 +329,69 @@ app.post('/api/lotes', verificarAuth, async (req, res) => {
     }
 });
 
+app.put('/api/lotes/:id', verificarAuth, async (req, res) => {
+    const { rol } = req.usuario;
+    if (rol !== 'administrador' && rol !== 'supervisor') {
+        return res.status(403).json({ error: 'Acceso denegado' });
+    }
+
+    const { data: lote, error: errLote } = await consultarLotePorReferencia(req.params.id);
+    if (errLote || !lote) return res.status(404).json({ error: 'Lote no encontrado' });
+
+    const { codigo_lote, total_piezas_requeridas } = req.body;
+    const cambios = {};
+
+    if (codigo_lote !== undefined) {
+        const codigo = String(codigo_lote || '').trim();
+        if (!codigo) return res.status(400).json({ error: 'El código del lote no puede estar vacío' });
+        cambios.codigo_lote = codigo;
+    }
+
+    if (total_piezas_requeridas !== undefined) {
+        const total = Number(total_piezas_requeridas);
+        if (!Number.isInteger(total) || total <= 0) {
+            return res.status(400).json({ error: 'El total de piezas debe ser un entero mayor a cero' });
+        }
+        if (total < Number(lote.piezas_acumuladas)) {
+            return res.status(400).json({ error: 'El total de piezas no puede ser menor que las piezas acumuladas' });
+        }
+        cambios.total_piezas_requeridas = total;
+    }
+
+    try {
+        const { data: loteActualizado, error } = await actualizarLoteConEstado(lote.id, cambios, lote.estado);
+        if (error) {
+            if (error.code === '23505') return res.status(409).json({ error: 'Ya existe un lote con ese código' });
+            return res.status(500).json({ error: 'Error al actualizar el lote' });
+        }
+        res.json(formatearEstadoLote(loteActualizado));
+    } catch (err) {
+        res.status(500).json({ error: 'Error al actualizar el lote' });
+    }
+});
+
+app.delete('/api/lotes/:id', verificarAuth, async (req, res) => {
+    const { rol } = req.usuario;
+    if (rol !== 'administrador') {
+        return res.status(403).json({ error: 'Acceso denegado' });
+    }
+
+    const { data: lote, error: errLote } = await consultarLotePorReferencia(req.params.id);
+    if (errLote || !lote) return res.status(404).json({ error: 'Lote no encontrado' });
+
+    if (Number(lote.piezas_acumuladas) > 0) {
+        return res.status(409).json({ error: 'No se puede eliminar un lote con producción registrada' });
+    }
+
+    try {
+        const { error } = await supabase.from('lotes').delete().eq('id', lote.id);
+        if (error) return res.status(500).json({ error: 'Error al eliminar el lote' });
+        res.status(204).send();
+    } catch (err) {
+        res.status(500).json({ error: 'Error al eliminar el lote' });
+    }
+});
+
 // ---------------------------------------------------------------------------
 // Endpoints — Producción
 // ---------------------------------------------------------------------------

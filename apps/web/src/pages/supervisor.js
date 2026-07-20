@@ -15,6 +15,17 @@ export default function DashboardSupervisor() {
   const [error, setError] = useState(null);
   const [codigo, setCodigo] = useState('');
   const [total, setTotal] = useState('');
+  const [rolUsuario] = useState(() => {
+    if (typeof window === 'undefined') return null;
+    try {
+      const usuarioStr = localStorage.getItem('usuario');
+      return usuarioStr ? JSON.parse(usuarioStr).rol ?? null : null;
+    } catch {
+      return null;
+    }
+  });
+  const [editandoId, setEditandoId] = useState(null);
+  const [editForm, setEditForm] = useState({ codigo_lote: '', total_piezas_requeridas: '' });
 
   const fetchLotes = useCallback(async () => {
     try {
@@ -58,6 +69,44 @@ export default function DashboardSupervisor() {
       clearInterval(intervalo);
     };
   }, [fetchLotes]);
+
+  const editarLote = async (id) => {
+    try {
+      const res = await fetch(apiUrl(`/api/lotes/${id}`), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        body: JSON.stringify({
+          codigo_lote: editForm.codigo_lote,
+          total_piezas_requeridas: parseInt(editForm.total_piezas_requeridas),
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Error al actualizar lote');
+      }
+      setEditandoId(null);
+      fetchLotes();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const eliminarLote = async (id) => {
+    if (!window.confirm('¿Eliminar este lote? Esta acción no se puede deshacer.')) return;
+    try {
+      const res = await fetch(apiUrl(`/api/lotes/${id}`), {
+        method: 'DELETE',
+        headers: getAuthHeaders(),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Error al eliminar lote');
+      }
+      fetchLotes();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
 
   const handleLogout = () => {
     localStorage.removeItem('token');
@@ -128,6 +177,42 @@ export default function DashboardSupervisor() {
                         style={{ width: `${Math.min(lote.porcentaje, 100)}%` }}
                       />
                     </div>
+                    {editandoId === lote.id ? (
+                      <form className="edit-form" onSubmit={(e) => { e.preventDefault(); editarLote(lote.id); }}>
+                        <input
+                          value={editForm.codigo_lote}
+                          onChange={e => setEditForm({ ...editForm, codigo_lote: e.target.value })}
+                          placeholder="Código del lote"
+                        />
+                        <input
+                          type="number"
+                          value={editForm.total_piezas_requeridas}
+                          onChange={e => setEditForm({ ...editForm, total_piezas_requeridas: e.target.value })}
+                          placeholder="Total de piezas"
+                        />
+                        <div className="edit-form-actions">
+                          <button className="btn-guardar" type="submit">Guardar</button>
+                          <button className="btn-cancelar" type="button" onClick={() => setEditandoId(null)}>Cancelar</button>
+                        </div>
+                      </form>
+                    ) : (
+                      <div className="lote-acciones">
+                        <button
+                          className="btn-editar"
+                          onClick={() => {
+                            setEditandoId(lote.id);
+                            setEditForm({ codigo_lote: lote.codigo_lote, total_piezas_requeridas: String(lote.total_piezas_requeridas) });
+                          }}
+                        >
+                          Editar
+                        </button>
+                        {rolUsuario === 'administrador' && (
+                          <button className="btn-eliminar" onClick={() => eliminarLote(lote.id)}>
+                            Eliminar
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </div>
                 );
               })
@@ -181,6 +266,19 @@ export default function DashboardSupervisor() {
         font-weight: bold; 
         }
       .btn-logout:hover { background: #fee2e2; }
+        .lote-acciones { display: flex; gap: 0.5rem; margin-top: 1rem; }
+        .btn-editar { background: #f1f5f9; color: #334155; border: 1px solid #cbd5e1; padding: 0.4rem 0.85rem; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: 600; }
+        .btn-editar:hover { background: #e2e8f0; }
+        .btn-eliminar { background: #fee2e2; color: #b91c1c; border: 1px solid #fecaca; padding: 0.4rem 0.85rem; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: 600; }
+        .btn-eliminar:hover { background: #fecaca; }
+        .edit-form { margin-top: 1rem; display: flex; flex-direction: column; gap: 0.5rem; }
+        .edit-form input { padding: 0.55rem 0.75rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.9rem; }
+        .edit-form input:focus { outline: none; border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
+        .edit-form-actions { display: flex; gap: 0.5rem; }
+        .btn-guardar { background: #2563eb; color: white; border: none; padding: 0.45rem 1rem; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 0.85rem; }
+        .btn-guardar:hover { background: #1d4ed8; }
+        .btn-cancelar { background: #f1f5f9; color: #334155; border: 1px solid #cbd5e1; padding: 0.45rem 1rem; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 0.85rem; }
+        .btn-cancelar:hover { background: #e2e8f0; }
       @media (max-width: 760px) {
         .container { padding: 1rem; }
         .header { align-items: stretch; flex-direction: column; }

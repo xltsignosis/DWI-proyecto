@@ -2,12 +2,18 @@
     const builder = {
         select: jest.fn().mockReturnThis(),
         eq: jest.fn().mockReturnThis(),
+        ilike: jest.fn().mockReturnThis(),
         gte: jest.fn().mockReturnThis(),
         lte: jest.fn().mockReturnThis(),
         order: jest.fn().mockReturnThis(),
         insert: jest.fn().mockReturnThis(),
         update: jest.fn().mockReturnThis(),
+        delete: jest.fn().mockReturnThis(),
         single: jest.fn().mockImplementation(() => {
+            const singleData = Array.isArray(data) ? (data[0] ?? null) : data;
+            return Promise.resolve({ data: singleData, error });
+        }),
+        maybeSingle: jest.fn().mockImplementation(() => {
             const singleData = Array.isArray(data) ? (data[0] ?? null) : data;
             return Promise.resolve({ data: singleData, error });
         }),
