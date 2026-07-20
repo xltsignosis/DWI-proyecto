@@ -15,7 +15,15 @@ export default function DashboardSupervisor() {
   const [error, setError] = useState(null);
   const [codigo, setCodigo] = useState('');
   const [total, setTotal] = useState('');
-  const [rolUsuario, setRolUsuario] = useState(null);
+  const [rolUsuario] = useState(() => {
+    if (typeof window === 'undefined') return null;
+    try {
+      const usuarioStr = localStorage.getItem('usuario');
+      return usuarioStr ? JSON.parse(usuarioStr).rol ?? null : null;
+    } catch {
+      return null;
+    }
+  });
   const [editandoId, setEditandoId] = useState(null);
   const [editForm, setEditForm] = useState({ codigo_lote: '', total_piezas_requeridas: '' });
 
@@ -52,16 +60,6 @@ export default function DashboardSupervisor() {
       setError(err.message);
     }
   };
-
-  useEffect(() => {
-    const usuarioStr = localStorage.getItem('usuario');
-    if (usuarioStr) {
-      try {
-        const usuario = JSON.parse(usuarioStr);
-        setRolUsuario(usuario.rol);
-      } catch (e) {}
-    }
-  }, []);
 
   useEffect(() => {
     const cargaInicial = setTimeout(fetchLotes, 0);
