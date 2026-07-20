@@ -7,6 +7,7 @@
         order: jest.fn().mockReturnThis(),
         insert: jest.fn().mockReturnThis(),
         update: jest.fn().mockReturnThis(),
+        delete: jest.fn().mockReturnThis(),
         single: jest.fn().mockImplementation(() => {
             const singleData = Array.isArray(data) ? (data[0] ?? null) : data;
             return Promise.resolve({ data: singleData, error });
