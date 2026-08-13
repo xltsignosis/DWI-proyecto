@@ -6,7 +6,10 @@ const express = require('express');
 const cors = require('cors');
 const PDFDocument = require('pdfkit');
 const ExcelJS = require('exceljs');
+const { createClient } = require('@supabase/supabase-js');
 const supabase = require('./supabaseClient');
+const supabaseAuth = supabase.authClient || supabase;
+const supabaseAdmin = supabase.adminClient || supabase;
 const { validarRegistro } = require('./validaciones');
 
 const app = express();
@@ -101,9 +104,25 @@ function getSupabaseErrorMessage(error, fallback) {
     return error?.message || error?.details || fallback;
 }
 
-async function actualizarLoteConEstado(loteId, cambios, estado) {
+function crearClienteAutenticado(token) {
+    if (process.env.NODE_ENV === 'test') return supabase;
+
+    return createClient(
+        process.env.SUPABASE_URL,
+        process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY,
+        {
+            global: {
+                headers: {
+                    Authorization: `Bearer ${token}`
+                }
+            }
+        }
+    );
+}
+
+async function actualizarLoteConEstado(loteId, cambios, estado, cliente = supabase) {
     const cambiosConEstadoTexto = { ...cambios, estado };
-    let resultado = await supabase
+    let resultado = await cliente
         .from('lotes')
         .update(cambiosConEstadoTexto)
         .eq('id', loteId)
@@ -114,11 +133,11 @@ async function actualizarLoteConEstado(loteId, cambios, estado) {
 
     if ('fecha_cierre' in cambios) {
         const { fecha_cierre, ...cambiosSinFechaCierre } = cambios;
-        const resultadoSinFechaCierre = await actualizarLoteConEstado(loteId, cambiosSinFechaCierre, estado);
+        const resultadoSinFechaCierre = await actualizarLoteConEstado(loteId, cambiosSinFechaCierre, estado, cliente);
         if (!resultadoSinFechaCierre.error) return resultadoSinFechaCierre;
     }
 
-    const { data: estadoCatalogo, error: errEstado } = await supabase
+    const { data: estadoCatalogo, error: errEstado } = await cliente
         .from('estados_lote')
         .select('id')
         .eq('nombre', estado)
@@ -126,7 +145,7 @@ async function actualizarLoteConEstado(loteId, cambios, estado) {
 
     if (errEstado || !estadoCatalogo) return resultado;
 
-    return supabase
+    return cliente
         .from('lotes')
         .update({ ...cambios, estado_id: estadoCatalogo.id })
         .eq('id', loteId)
@@ -134,8 +153,8 @@ async function actualizarLoteConEstado(loteId, cambios, estado) {
         .single();
 }
 
-async function crearLoteConEstado(lote) {
-    let resultado = await supabase
+async function crearLoteConEstado(lote, cliente = supabase) {
+    let resultado = await cliente
         .from('lotes')
         .insert([{ ...lote, estado: 'abierto' }])
         .select('*')
@@ -143,7 +162,7 @@ async function crearLoteConEstado(lote) {
 
     if (!resultado.error) return resultado;
 
-    const { data: estadoCatalogo, error: errEstado } = await supabase
+    const { data: estadoCatalogo, error: errEstado } = await cliente
         .from('estados_lote')
         .select('id')
         .eq('nombre', 'abierto')
@@ -151,34 +170,34 @@ async function crearLoteConEstado(lote) {
 
     if (errEstado || !estadoCatalogo) return resultado;
 
-    return supabase
+    return cliente
         .from('lotes')
         .insert([{ ...lote, estado_id: estadoCatalogo.id }])
         .select('*, estados_lote(nombre)')
         .single();
 }
 
-async function consultarLotes() {
-    let resultado = await supabase
+async function consultarLotes(cliente = supabase) {
+    let resultado = await cliente
         .from('lotes')
         .select('*')
         .order('id', { ascending: true });
 
     if (!resultado.error) return resultado;
 
-    return supabase
+    return cliente
         .from('lotes')
         .select('*, estados_lote(nombre)')
         .order('id', { ascending: true });
 }
 
-async function consultarLotePorReferencia(referencia) {
+async function consultarLotePorReferencia(referencia, cliente = supabase) {
     const valor = String(referencia || '').trim();
     if (!valor) return { data: null, error: null };
 
     const columna = /^\d+$/.test(valor) ? 'id' : 'codigo_lote';
 
-    return supabase
+    return cliente
         .from('lotes')
         .select('*')
         .eq(columna, valor)
@@ -197,13 +216,15 @@ async function verificarAuth(req, res, next) {
         return res.status(401).json({ error: 'Token requerido' });
     }
 
-    const { data, error } = await supabase.auth.getUser(token);
+    const { data, error } = await supabaseAuth.auth.getUser(token);
 
     if (error || !data.user) {
         return res.status(401).json({ error: 'Token inválido o expirado' });
     }
 
-    const { data: usuarios, error: dbError } = await supabase
+    const supabaseUsuario = crearClienteAutenticado(token);
+
+    const { data: usuarios, error: dbError } = await supabaseUsuario
         .from('usuarios')
         .select('id, nombre, rol')
         .eq('id', data.user.id);
@@ -213,6 +234,7 @@ async function verificarAuth(req, res, next) {
     }
 
     req.usuario = usuarios[0];
+    req.supabase = supabaseUsuario;
     next();
 }
 
@@ -222,19 +244,30 @@ async function verificarAuth(req, res, next) {
 
 app.post('/api/auth/login', async (req, res) => {
     const { email, password } = req.body;
+    const emailNormalizado = String(email || '').trim().toLowerCase();
+
+    if (!emailNormalizado || !password) {
+        return res.status(400).json({ error: 'Correo y contraseña son obligatorios' });
+    }
 
     try {
-        const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-            email,
+        const { data: authData, error: authError } = await supabaseAuth.auth.signInWithPassword({
+            email: emailNormalizado,
             password,
         });
 
-        if (authError) return res.status(401).json({ error: 'Credenciales incorrectas' });
+        if (authError) {
+            if (/api key|jwt|project/i.test(authError.message || '')) {
+                return res.status(503).json({ error: 'Configuración de Supabase inválida' });
+            }
 
-        const { data: usuarios, error: dbError } = await supabase
+            return res.status(401).json({ error: 'Credenciales incorrectas' });
+        }
+
+        const { data: usuarios, error: dbError } = await supabaseAuth
             .from('usuarios')
             .select('id, nombre, rol')
-            .eq('email', email.trim());
+            .eq('email', emailNormalizado);
 
         if (dbError || !usuarios || usuarios.length === 0) {
             return res.status(404).json({ error: 'Usuario no encontrado' });
@@ -252,7 +285,7 @@ app.post('/api/auth/login', async (req, res) => {
 
 app.get('/api/lotes/estado', verificarAuth, async (req, res) => {
     try {
-        const { data: lotes, error } = await consultarLotes();
+        const { data: lotes, error } = await consultarLotes(req.supabase);
         if (error) return res.status(500).json({ error: 'Error al consultar lotes' });
         res.json((lotes || []).map(formatearEstadoLote));
     } catch (err) {
@@ -262,7 +295,7 @@ app.get('/api/lotes/estado', verificarAuth, async (req, res) => {
 
 app.get('/api/lotes/estado/:id', verificarAuth, async (req, res) => {
     try {
-        const { data: lote, error } = await consultarLotePorReferencia(req.params.id);
+        const { data: lote, error } = await consultarLotePorReferencia(req.params.id, req.supabase);
         if (error || !lote) return res.status(404).json({ error: 'Lote no encontrado' });
         res.json(formatearEstadoLote(lote));
     } catch (err) {
@@ -290,7 +323,7 @@ app.post('/api/lotes', verificarAuth, async (req, res) => {
             codigo_lote: codigo,
             total_piezas_requeridas: total,
             piezas_acumuladas: 0
-        });
+        }, req.supabase);
 
         if (error) {
             if (error.code === '23505') return res.status(409).json({ error: 'Ya existe un lote con ese código' });
@@ -309,7 +342,7 @@ app.put('/api/lotes/:id', verificarAuth, async (req, res) => {
         return res.status(403).json({ error: 'Acceso denegado' });
     }
 
-    const { data: lote, error: errLote } = await consultarLotePorReferencia(req.params.id);
+    const { data: lote, error: errLote } = await consultarLotePorReferencia(req.params.id, req.supabase);
     if (errLote || !lote) return res.status(404).json({ error: 'Lote no encontrado' });
 
     const { codigo_lote, total_piezas_requeridas } = req.body;
@@ -333,7 +366,7 @@ app.put('/api/lotes/:id', verificarAuth, async (req, res) => {
     }
 
     try {
-        const { data: loteActualizado, error } = await actualizarLoteConEstado(lote.id, cambios, lote.estado);
+        const { data: loteActualizado, error } = await actualizarLoteConEstado(lote.id, cambios, lote.estado, req.supabase);
         if (error) {
             if (error.code === '23505') return res.status(409).json({ error: 'Ya existe un lote con ese código' });
             return res.status(500).json({ error: 'Error al actualizar el lote' });
@@ -344,13 +377,42 @@ app.put('/api/lotes/:id', verificarAuth, async (req, res) => {
     }
 });
 
+app.patch('/api/lotes/:id/cerrar', verificarAuth, async (req, res) => {
+    const { rol } = req.usuario;
+    if (rol !== 'administrador' && rol !== 'supervisor') {
+        return res.status(403).json({ error: 'Acceso denegado' });
+    }
+
+    try {
+        const { data: lote, error: errLote } = await consultarLotePorReferencia(req.params.id, req.supabase);
+        if (errLote || !lote) return res.status(404).json({ error: 'Lote no encontrado' });
+
+        if ((lote.estado || '').toLowerCase() === 'cerrado') {
+            return res.status(409).json({ error: 'El lote ya está cerrado' });
+        }
+
+        const cambiosLote = { fecha_cierre: new Date().toISOString() };
+        const { data: loteActualizado, error } = await actualizarLoteConEstado(lote.id, cambiosLote, 'cerrado', req.supabase);
+
+        if (error) {
+            return res.status(500).json({
+                error: 'Error al cerrar el lote',
+                detalle: getSupabaseErrorMessage(error, 'No se pudo cerrar el lote')
+            });
+        }
+
+        res.json(formatearEstadoLote(loteActualizado));
+    } catch (err) {
+        res.status(500).json({ error: 'Error al cerrar el lote' });
+    }
+});
 app.delete('/api/lotes/:id', verificarAuth, async (req, res) => {
     const { rol } = req.usuario;
     if (rol !== 'administrador') {
         return res.status(403).json({ error: 'Acceso denegado' });
     }
 
-    const { data: lote, error: errLote } = await consultarLotePorReferencia(req.params.id);
+    const { data: lote, error: errLote } = await consultarLotePorReferencia(req.params.id, req.supabase);
     if (errLote || !lote) return res.status(404).json({ error: 'Lote no encontrado' });
 
     if (Number(lote.piezas_acumuladas) > 0) {
@@ -358,7 +420,7 @@ app.delete('/api/lotes/:id', verificarAuth, async (req, res) => {
     }
 
     try {
-        const { error } = await supabase.from('lotes').delete().eq('id', lote.id);
+        const { error } = await req.supabase.from('lotes').delete().eq('id', lote.id);
         if (error) return res.status(500).json({ error: 'Error al eliminar el lote' });
         res.status(204).send();
     } catch (err) {
@@ -376,7 +438,7 @@ app.post('/api/produccion/registrar', verificarAuth, async (req, res) => {
     const usuarioId = req.usuario.id;
 
     try {
-        const { data: lote, error: errLote } = await consultarLotePorReferencia(lote_id);
+        const { data: lote, error: errLote } = await consultarLotePorReferencia(lote_id, req.supabase);
         if (errLote || !lote) return res.status(404).json({ error: 'Lote no encontrado' });
 
         if ((lote.estado || '').toLowerCase() === 'cerrado') {
@@ -396,7 +458,7 @@ app.post('/api/produccion/registrar', verificarAuth, async (req, res) => {
         if (!validacion.valido) return res.status(400).json({ error: 'Registro rechazado: datos inválidos.' });
         if (validacion.excede) return res.status(400).json({ error: 'Registro rechazado: Supera el límite.' });
 
-        const { error: errInsert } = await supabase.from('registros_produccion').insert([
+        const { error: errInsert } = await req.supabase.from('registros_produccion').insert([
             { lote_id: lote.id, usuario_id: usuarioId, piezas_reportadas: piezasNuevas }
         ]);
 
@@ -413,7 +475,7 @@ app.post('/api/produccion/registrar', verificarAuth, async (req, res) => {
         const cambiosLote = { piezas_acumuladas: nuevoAcumulado };
         if (validacion.completo) cambiosLote.fecha_cierre = new Date().toISOString();
 
-        const { data: loteActualizado, error: errUpdate } = await actualizarLoteConEstado(lote.id, cambiosLote, nuevoEstado);
+        const { data: loteActualizado, error: errUpdate } = await actualizarLoteConEstado(lote.id, cambiosLote, nuevoEstado, req.supabase);
 
         if (errUpdate) {
             console.error('Error al actualizar lote:', errUpdate);
@@ -644,7 +706,7 @@ app.post('/api/usuarios', verificarAuth, async (req, res) => {
   }
 
   try {
-    const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+    const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email,
       password,
       email_confirm: true

@@ -567,3 +567,67 @@ describe('DELETE /api/lotes/:id', () => {
         expect(res.status).toBe(500);
     });
 });
+
+describe('PATCH /api/lotes/:id/cerrar', () => {
+    test('retorna 401 sin token', async () => {
+        const res = await supertest(app).patch('/api/lotes/1/cerrar');
+        expect(res.status).toBe(401);
+    });
+
+    test('retorna 403 con rol operador', async () => {
+        setupAuthAs(OPERADOR_USER);
+        const res = await supertest(app)
+            .patch('/api/lotes/1/cerrar')
+            .set('Authorization', 'Bearer valid-token');
+        expect(res.status).toBe(403);
+    });
+
+    test('cierra manualmente un lote con rol supervisor', async () => {
+        setupAuthAs(SUPERVISOR_USER);
+        let loteCalls = 0;
+        mockFromImpl = jest.fn().mockImplementation((table) => {
+            if (table === 'usuarios') return createQueryMock({ data: [SUPERVISOR_USER] });
+            if (table === 'lotes') {
+                loteCalls++;
+                if (loteCalls === 1) return createQueryMock({ data: LOTE_ABIERTO });
+                return createQueryMock({ data: { ...LOTE_ABIERTO, estado: 'cerrado' } });
+            }
+            return createQueryMock({ data: [] });
+        });
+
+        const res = await supertest(app)
+            .patch('/api/lotes/1/cerrar')
+            .set('Authorization', 'Bearer valid-token');
+
+        expect(res.status).toBe(200);
+        expect(res.body.estado).toBe('cerrado');
+    });
+
+    test('retorna 409 si el lote ya está cerrado', async () => {
+        mockFromImpl = jest.fn().mockImplementation((table) => {
+            if (table === 'usuarios') return createQueryMock({ data: [ADMIN_USER] });
+            if (table === 'lotes') return createQueryMock({ data: { ...LOTE_ABIERTO, estado: 'cerrado' } });
+            return createQueryMock({ data: [] });
+        });
+
+        const res = await supertest(app)
+            .patch('/api/lotes/1/cerrar')
+            .set('Authorization', 'Bearer valid-token');
+
+        expect(res.status).toBe(409);
+    });
+
+    test('retorna 404 si el lote no existe', async () => {
+        mockFromImpl = jest.fn().mockImplementation((table) => {
+            if (table === 'usuarios') return createQueryMock({ data: [ADMIN_USER] });
+            if (table === 'lotes') return createQueryMock({ data: null, error: null });
+            return createQueryMock({ data: [] });
+        });
+
+        const res = await supertest(app)
+            .patch('/api/lotes/999/cerrar')
+            .set('Authorization', 'Bearer valid-token');
+
+        expect(res.status).toBe(404);
+    });
+});

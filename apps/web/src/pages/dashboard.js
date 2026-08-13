@@ -14,9 +14,7 @@ export default function Dashboard() {
     }
 
     const usuario = JSON.parse(usuarioStr);
-    if (usuario.rol === 'administrador') {
-      router.push('/nomina');
-    } else if (usuario.rol === 'supervisor') {
+    if (usuario.rol === 'administrador' || usuario.rol === 'supervisor') {
       router.push('/supervisor');
     } else {
       router.push('/operador');

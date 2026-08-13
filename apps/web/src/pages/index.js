@@ -43,7 +43,7 @@ export default function Login() {
       } else if (data.usuario.rol === 'supervisor') {
         router.push('/supervisor');
       } else {
-        router.push('/dashboard');
+        router.push('/supervisor');
       }
 
     } catch (e) {

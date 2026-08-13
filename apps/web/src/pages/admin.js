@@ -110,8 +110,30 @@ export default function AdminUsuarios() {
         <button className="btn-cerrar" onClick={cerrarSesion}>Cerrar sesión</button>
       </header>
 
+      <section className="resumen-grid">
+        <div className="resumen-card">
+          <span>Total usuarios</span>
+          <strong>{usuarios.length}</strong>
+        </div>
+        <div className="resumen-card">
+          <span>Administradores</span>
+          <strong>{usuarios.filter(u => u.rol === 'administrador').length}</strong>
+        </div>
+        <div className="resumen-card">
+          <span>Supervisores</span>
+          <strong>{usuarios.filter(u => u.rol === 'supervisor').length}</strong>
+        </div>
+        <div className="resumen-card">
+          <span>Operadores</span>
+          <strong>{usuarios.filter(u => u.rol === 'operador').length}</strong>
+        </div>
+      </section>
+
       <section className="seccion">
-        <h2>Nuevo usuario</h2>
+        <div className="section-heading">
+          <h2>Nuevo usuario</h2>
+          <p>Alta de usuarios conectada al backend con rol operativo.</p>
+        </div>
         <form className="form-crear" onSubmit={crearUsuario}>
           <input
             placeholder="Nombre completo"
@@ -147,7 +169,10 @@ export default function AdminUsuarios() {
       </section>
 
       <section className="seccion">
-        <h2>Usuarios registrados</h2>
+        <div className="section-heading">
+          <h2>Usuarios registrados</h2>
+          <p>Listado actualizado desde Supabase mediante el endpoint real.</p>
+        </div>
         {loading && <p className="status-msg">Cargando usuarios...</p>}
         {!loading && usuarios.length === 0 && (
           <p className="empty-msg">Sin usuarios registrados.</p>
@@ -184,15 +209,22 @@ export default function AdminUsuarios() {
       </section>
 
       <style jsx>{`
-        .container { padding: 2rem; background: #f4f6f9; min-height: 100vh; font-family: sans-serif; }
+        .container { padding: 2rem; background: #f3f6fb; min-height: 100vh; font-family: sans-serif; color: #0f172a; }
         .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; }
         h1 { color: #1e293b; font-size: 1.8rem; margin: 0; }
         h2 { color: #334155; font-size: 1.2rem; margin-bottom: 1rem; }
         .btn-cerrar { background: #ef4444; color: white; padding: 0.5rem 1.2rem; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; }
         .btn-cerrar:hover { background: #dc2626; }
-        .seccion { background: white; padding: 1.5rem; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); margin-bottom: 2rem; }
-        .form-crear { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; }
-        .form-crear input, .form-crear select { padding: 0.6rem 1rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.95rem; flex: 1; min-width: 160px; }
+        .resumen-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+        .resumen-card { background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 1rem; box-shadow: 0 10px 24px rgba(15,23,42,0.06); display: grid; gap: 0.35rem; }
+        .resumen-card span { color: #64748b; font-size: 0.78rem; font-weight: 800; text-transform: uppercase; }
+        .resumen-card strong { color: #0f172a; font-size: 1.8rem; }
+        .seccion { background: white; padding: 1.5rem; border-radius: 8px; box-shadow: 0 12px 30px rgba(15,23,42,0.08); border: 1px solid #e2e8f0; margin-bottom: 2rem; }
+        .section-heading { margin-bottom: 1rem; }
+        .section-heading h2 { margin-bottom: 0.25rem; }
+        .section-heading p { margin: 0; color: #64748b; font-size: 0.92rem; }
+        .form-crear { display: grid; grid-template-columns: repeat(4, minmax(150px, 1fr)) auto; gap: 0.75rem; align-items: center; }
+        .form-crear input, .form-crear select { padding: 0.75rem 1rem; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 0.95rem; min-width: 0; }
         .btn-crear { background: #2563eb; color: white; padding: 0.6rem 1.2rem; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; white-space: nowrap; }
         .btn-crear:hover:not(:disabled) { background: #1d4ed8; }
         .btn-crear:disabled { background: #94a3b8; cursor: not-allowed; }
@@ -206,6 +238,8 @@ export default function AdminUsuarios() {
         .tabla tr:last-child td { border-bottom: none; }
         .tabla tr:hover td { background: #f8fafc; }
         .badge { padding: 0.2rem 0.7rem; border-radius: 20px; font-size: 0.78rem; font-weight: 600; }
+        @media (max-width: 960px) { .form-crear { grid-template-columns: 1fr 1fr; } .btn-crear { width: 100%; } }
+        @media (max-width: 640px) { .container { padding: 1rem; } .header { flex-direction: column; align-items: stretch; } .form-crear { grid-template-columns: 1fr; } .tabla { display: block; overflow-x: auto; white-space: nowrap; } }
       `}</style>
     </div>
   );

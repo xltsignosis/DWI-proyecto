@@ -79,16 +79,27 @@ describe('POST /api/auth/login', () => {
         expect(res.body.error).toMatch(/error interno/i);
     });
 
-    test('[hallazgo] no valida campos vacíos antes de llamar a Supabase (delega el error a Supabase)', async () => {
-        mockSignInWithPassword = jest.fn().mockResolvedValue({
-            data: null,
-            error: new Error('Missing email or password'),
-        });
-
+    test('retorna 400 si faltan correo o contraseña', async () => {
         const res = await supertest(app)
             .post('/api/auth/login')
             .send({});
 
-        expect(res.status).toBe(401);
+        expect(res.status).toBe(400);
+        expect(res.body.error).toMatch(/correo y contraseña/i);
+        expect(mockSignInWithPassword).not.toHaveBeenCalled();
+    });
+
+    test('retorna 503 si Supabase rechaza la API key configurada', async () => {
+        mockSignInWithPassword = jest.fn().mockResolvedValue({
+            data: null,
+            error: new Error('Unregistered API key'),
+        });
+
+        const res = await supertest(app)
+            .post('/api/auth/login')
+            .send({ email: 'juan@example.com', password: 'clave123' });
+
+        expect(res.status).toBe(503);
+        expect(res.body.error).toMatch(/supabase inválida/i);
     });
 });

@@ -25,6 +25,7 @@ export default function DashboardSupervisor() {
     }
   });
   const [editandoId, setEditandoId] = useState(null);
+  const [cerrandoId, setCerrandoId] = useState(null);
   const [editForm, setEditForm] = useState({ codigo_lote: '', total_piezas_requeridas: '' });
 
   const fetchLotes = useCallback(async () => {
@@ -108,6 +109,24 @@ export default function DashboardSupervisor() {
     }
   };
 
+  const cerrarLote = async (id, codigo) => {
+    if (!window.confirm(`¿Cerrar manualmente el lote ${codigo}?`)) return;
+    setCerrandoId(id);
+    setError(null);
+    try {
+      const res = await fetch(apiUrl(`/api/lotes/${id}/cerrar`), {
+        method: 'PATCH',
+        headers: getAuthHeaders(),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Error al cerrar lote');
+      await fetchLotes();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setCerrandoId(null);
+    }
+  };
   const handleLogout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('usuario');
@@ -124,17 +143,25 @@ export default function DashboardSupervisor() {
         <>
           <header className="header">
             <div>
-              <span className="eyebrow">Supervisión</span>
+              <span className="eyebrow">{rolUsuario === 'administrador' ? 'Administración' : 'Supervisión'}</span>
               <h1>Dashboard de Producción</h1>
+              <p className="header-copy">Gestiona lotes, revisa avance en tiempo real y cierra producción cuando sea necesario.</p>
             </div>
             <div className="header-actions">
-              <button className="btn-reporte" onClick={() => router.push('/nomina')}>Generar reporte</button>
+              {rolUsuario === 'administrador' && (
+                <button className="btn-secundario" onClick={() => router.push('/admin')}>Usuarios</button>
+              )}
+              <button className="btn-reporte" onClick={() => router.push('/nomina')}>Nómina</button>
               <button className="btn-logout" onClick={handleLogout}>Cerrar sesión</button>
             </div>
           </header>
           
 
           <form className="crear-lote" onSubmit={(e) => { e.preventDefault(); crearLote(); }}>
+            <div className="form-title">
+              <span>Nuevo lote</span>
+              <strong>Crear orden de producción</strong>
+            </div>
             <div>
               <label>Código del lote</label>
               <input placeholder="Código del lote" value={codigo} onChange={e => setCodigo(e.target.value)} />
@@ -208,7 +235,16 @@ export default function DashboardSupervisor() {
                         </button>
                         {rolUsuario === 'administrador' && (
                           <button className="btn-eliminar" onClick={() => eliminarLote(lote.id)}>
-                            Eliminar
+                            Eliminar lote
+                          </button>
+                        )}
+                        {lote.estado !== 'cerrado' && (
+                          <button
+                            className="btn-cerrar-lote"
+                            onClick={() => cerrarLote(lote.id, lote.codigo_lote)}
+                            disabled={cerrandoId === lote.id}
+                          >
+                            {cerrandoId === lote.id ? 'Cerrando...' : 'Cerrar lote'}
                           </button>
                         )}
                       </div>
@@ -227,8 +263,14 @@ export default function DashboardSupervisor() {
         .header-actions { display: flex; justify-content: flex-end; align-items: center; gap: 0.75rem; }
         .eyebrow { color: #2563eb; font-size: 0.78rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; }
         h1 { color: #0f172a; font-size: 1.9rem; margin: 0.2rem 0 0; }
+        .header-copy { color: #64748b; margin: 0.35rem 0 0; max-width: 620px; line-height: 1.5; }
         .btn-reporte { background: #0f172a; color: white; padding: 0.7rem 1rem; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; box-shadow: 0 8px 18px rgba(15, 23, 42, 0.18); }
-        .crear-lote { display: grid; grid-template-columns: minmax(180px, 1fr) minmax(160px, 220px) auto; gap: 1rem; align-items: end; margin-bottom: 2rem; background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 1rem; box-shadow: 0 10px 26px rgba(15, 23, 42, 0.06); }
+        .btn-secundario { background: white; color: #2563eb; border: 1px solid #bfdbfe; padding: 0.7rem 1rem; border-radius: 8px; cursor: pointer; font-weight: bold; }
+        .btn-secundario:hover { background: #eff6ff; }
+        .crear-lote { display: grid; grid-template-columns: minmax(170px, 220px) minmax(180px, 1fr) minmax(160px, 220px) auto; gap: 1rem; align-items: end; margin-bottom: 2rem; background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 1rem; box-shadow: 0 10px 26px rgba(15, 23, 42, 0.06); }
+        .form-title { align-self: stretch; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 0.85rem; display: grid; gap: 0.2rem; }
+        .form-title span { color: #2563eb; font-size: 0.75rem; font-weight: 800; text-transform: uppercase; }
+        .form-title strong { color: #0f172a; font-size: 0.95rem; }
         .crear-lote div { display: flex; flex-direction: column; gap: 0.4rem; }
         label { color: #334155; font-size: 0.85rem; font-weight: 700; }
         .crear-lote input { padding: 0.75rem 0.9rem; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 0.95rem; flex: 1; }
@@ -271,6 +313,9 @@ export default function DashboardSupervisor() {
         .btn-editar:hover { background: #e2e8f0; }
         .btn-eliminar { background: #fee2e2; color: #b91c1c; border: 1px solid #fecaca; padding: 0.4rem 0.85rem; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: 600; }
         .btn-eliminar:hover { background: #fecaca; }
+        .btn-cerrar-lote { background: #fff7ed; color: #c2410c; border: 1px solid #fed7aa; padding: 0.4rem 0.85rem; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: 700; }
+        .btn-cerrar-lote:hover:not(:disabled) { background: #ffedd5; }
+        .btn-cerrar-lote:disabled { opacity: 0.65; cursor: not-allowed; }
         .edit-form { margin-top: 1rem; display: flex; flex-direction: column; gap: 0.5rem; }
         .edit-form input { padding: 0.55rem 0.75rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.9rem; }
         .edit-form input:focus { outline: none; border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
